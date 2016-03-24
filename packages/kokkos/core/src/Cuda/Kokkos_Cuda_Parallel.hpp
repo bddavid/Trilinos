@@ -61,7 +61,7 @@
 #include <Cuda/Kokkos_Cuda_Internal.hpp>
 #include <Kokkos_Vectorization.hpp>
 
-#ifdef KOKKOSP_ENABLE_PROFILING
+#if (KOKKOS_ENABLE_PROFILING)
 #include <impl/Kokkos_Profiling_Interface.hpp>
 #include <typeinfo>
 #endif
@@ -99,7 +99,13 @@ public:
 
   __device__ inline
   const execution_space::scratch_memory_space & team_shmem() const
-    { return m_team_shared ; }
+    { return m_team_shared.set_team_thread_mode(1,0) ; }
+  __device__ inline
+  const execution_space::scratch_memory_space & team_scratch(int) const
+    { return m_team_shared.set_team_thread_mode(1,0) ; }
+  __device__ inline
+  const execution_space::scratch_memory_space & thread_scratch(int) const
+    { return m_team_shared.set_team_thread_mode(team_size(),team_rank()) ; }
 
   __device__ inline int league_rank() const { return m_league_rank ; }
   __device__ inline int league_size() const { return m_league_size ; }
@@ -207,7 +213,12 @@ public:
 
 #else
 
-  const execution_space::scratch_memory_space & team_shmem() const {return m_team_shared;}
+  const execution_space::scratch_memory_space & team_shmem() const
+    { return m_team_shared.set_team_thread_mode(1,0) ; }
+  const execution_space::scratch_memory_space & team_scratch(int) const
+    { return m_team_shared.set_team_thread_mode(1,0) ; }
+  const execution_space::scratch_memory_space & thread_scratch(int) const
+    { return m_team_shared.set_team_thread_mode(team_size(),team_rank()) ; }
 
   int league_rank() const {return 0;}
   int league_size() const {return 1;}
@@ -1071,14 +1082,14 @@ private:
   template< class TagType >
   __device__ inline
   typename std::enable_if< std::is_same< TagType , void >::value >::type
-  exec_range( const Member & i , reference_type update , const bool final ) const
-    { m_functor( i , update , final ); }
+  exec_range( const Member & i , reference_type update , const bool final_result ) const
+    { m_functor( i , update , final_result ); }
 
   template< class TagType >
   __device__ inline
   typename std::enable_if< ! std::is_same< TagType , void >::value >::type
-  exec_range( const Member & i , reference_type update , const bool final ) const
-    { m_functor( TagType() , i , update , final ); }
+  exec_range( const Member & i , reference_type update , const bool final_result ) const
+    { m_functor( TagType() , i , update , final_result ); }
 
   //----------------------------------------
 
@@ -1724,7 +1735,7 @@ void parallel_reduce( const ExecPolicy  & policy
   typedef typename Kokkos::Impl::if_c<FunctorHasValueType, FunctorTypeIn, Impl::CudaFunctorAdapter<FunctorTypeIn,ExecPolicy,typename ViewType::value_type> >::type FunctorType;
   FunctorType functor = Impl::if_c<FunctorHasValueType,FunctorTypeIn,FunctorType>::select(functor_in,FunctorType(functor_in));
 
-#ifdef KOKKOSP_ENABLE_PROFILING
+#if (KOKKOS_ENABLE_PROFILING)
     uint64_t kpID = 0;
      if(Kokkos::Experimental::profileLibraryLoaded()) {
 	Kokkos::Experimental::beginParallelScan("" == str ? typeid(FunctorType).name() : str, 0, &kpID);
@@ -1737,7 +1748,7 @@ void parallel_reduce( const ExecPolicy  & policy
 
   closure.execute();
     
-#ifdef KOKKOSP_ENABLE_PROFILING
+#if (KOKKOS_ENABLE_PROFILING)
      if(Kokkos::Experimental::profileLibraryLoaded()) {
 	Kokkos::Experimental::endParallelScan(kpID);
      }
@@ -1777,7 +1788,7 @@ void parallel_reduce( const ExecPolicy  & policy
                , 1
                );
 
-#ifdef KOKKOSP_ENABLE_PROFILING
+#if (KOKKOS_ENABLE_PROFILING)
     uint64_t kpID = 0;
      if(Kokkos::Experimental::profileLibraryLoaded()) {
 	Kokkos::Experimental::beginParallelScan("" == str ? typeid(FunctorType).name() : str, 0, &kpID);
@@ -1790,7 +1801,7 @@ void parallel_reduce( const ExecPolicy  & policy
 
   closure.execute();
     
-#ifdef KOKKOSP_ENABLE_PROFILING
+#if (KOKKOS_ENABLE_PROFILING)
      if(Kokkos::Experimental::profileLibraryLoaded()) {
 	Kokkos::Experimental::endParallelScan(kpID);
      }
@@ -1828,7 +1839,7 @@ void parallel_reduce( const ExecPolicy  & policy
                , ValueTraits::value_count( functor )
                );
 
-#ifdef KOKKOSP_ENABLE_PROFILING
+#if (KOKKOS_ENABLE_PROFILING)
     uint64_t kpID = 0;
      if(Kokkos::Experimental::profileLibraryLoaded()) {
 	Kokkos::Experimental::beginParallelScan("" == str ? typeid(FunctorType).name() : str, 0, &kpID);
@@ -1841,7 +1852,7 @@ void parallel_reduce( const ExecPolicy  & policy
 
   closure.execute();
     
-#ifdef KOKKOSP_ENABLE_PROFILING
+#if (KOKKOS_ENABLE_PROFILING)
      if(Kokkos::Experimental::profileLibraryLoaded()) {
 	Kokkos::Experimental::endParallelScan(kpID);
      }
@@ -1872,7 +1883,7 @@ void parallel_reduce( const size_t        work_count
 
   FunctorType functor = Impl::if_c<FunctorHasValueType,FunctorTypeIn,FunctorType>::select(functor_in,FunctorType(functor_in));
 
-#ifdef KOKKOSP_ENABLE_PROFILING
+#if (KOKKOS_ENABLE_PROFILING)
     uint64_t kpID = 0;
      if(Kokkos::Experimental::profileLibraryLoaded()) {
 	Kokkos::Experimental::beginParallelScan("" == str ? typeid(FunctorType).name() : str, 0, &kpID);
@@ -1885,7 +1896,7 @@ void parallel_reduce( const size_t        work_count
 
   closure.execute();
 
-#ifdef KOKKOSP_ENABLE_PROFILING
+#if (KOKKOS_ENABLE_PROFILING)
      if(Kokkos::Experimental::profileLibraryLoaded()) {
 	Kokkos::Experimental::endParallelScan(kpID);
      }
@@ -1934,7 +1945,7 @@ void parallel_reduce( const size_t        work_count
                , 1
                );
 
-#ifdef KOKKOSP_ENABLE_PROFILING
+#if (KOKKOS_ENABLE_PROFILING)
     uint64_t kpID = 0;
      if(Kokkos::Experimental::profileLibraryLoaded()) {
 	Kokkos::Experimental::beginParallelScan("" == str ? typeid(FunctorType).name() : str, 0, &kpID);
@@ -1947,7 +1958,7 @@ void parallel_reduce( const size_t        work_count
 
   closure.execute();
     
-#ifdef KOKKOSP_ENABLE_PROFILING
+#if (KOKKOS_ENABLE_PROFILING)
      if(Kokkos::Experimental::profileLibraryLoaded()) {
 	Kokkos::Experimental::endParallelScan(kpID);
      }
@@ -1993,7 +2004,7 @@ void parallel_reduce( const size_t        work_count
                , ValueTraits::value_count( functor )
                );
 
-#ifdef KOKKOSP_ENABLE_PROFILING
+#if (KOKKOS_ENABLE_PROFILING)
     uint64_t kpID = 0;
      if(Kokkos::Experimental::profileLibraryLoaded()) {
 	Kokkos::Experimental::beginParallelScan("" == str ? typeid(FunctorType).name() : str, 0, &kpID);
@@ -2006,7 +2017,7 @@ void parallel_reduce( const size_t        work_count
 
   closure.execute();
     
-#ifdef KOKKOSP_ENABLE_PROFILING
+#if (KOKKOS_ENABLE_PROFILING)
      if(Kokkos::Experimental::profileLibraryLoaded()) {
 	Kokkos::Experimental::endParallelScan(kpID);
      }

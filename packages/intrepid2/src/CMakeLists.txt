@@ -98,6 +98,8 @@ IF (Intrepid2_ENABLE_Boost)
     Shared/MiniTensor/Intrepid2_MiniTensor_Matrix.h
     Shared/MiniTensor/Intrepid2_MiniTensor_Matrix.i.h
     Shared/MiniTensor/Intrepid2_MiniTensor_Matrix.t.h
+    Shared/MiniTensor/Intrepid2_MiniTensor_Solvers.h
+    Shared/MiniTensor/Intrepid2_MiniTensor_Solvers.t.h
     Shared/MiniTensor/Intrepid2_MiniTensor_Storage.h
     Shared/MiniTensor/Intrepid2_MiniTensor_Storage.i.h
     Shared/MiniTensor/Intrepid2_MiniTensor_Tensor.h
@@ -276,6 +278,16 @@ INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/Cell)
 APPEND_SET(HEADERS
   Cell/Intrepid2_CellTools.hpp
   Cell/Intrepid2_CellToolsDef.hpp
+  )
+
+#
+# Orientation headers
+#
+
+INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/Orientation)
+APPEND_SET(HEADERS
+  Orientation/Intrepid2_OrientationTools.hpp
+  Orientation/Intrepid2_OrientationToolsDef.hpp
   )
 
 #

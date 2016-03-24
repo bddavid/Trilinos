@@ -243,6 +243,11 @@ TEST_F( openmp, team_shared_request) {
   TestSharedTeam< Kokkos::OpenMP , Kokkos::Schedule<Kokkos::Dynamic> >();
 }
 
+TEST_F( openmp, team_scratch_request) {
+  TestScratchTeam< Kokkos::OpenMP , Kokkos::Schedule<Kokkos::Static> >();
+  TestScratchTeam< Kokkos::OpenMP , Kokkos::Schedule<Kokkos::Dynamic> >();
+}
+
 #if defined(KOKKOS_HAVE_CXX11_DISPATCH_LAMBDA) 
 TEST_F( openmp, team_lambda_shared_request) {
   TestLambdaSharedTeam< Kokkos::HostSpace, Kokkos::OpenMP , Kokkos::Schedule<Kokkos::Static> >();
@@ -374,8 +379,10 @@ TEST_F( openmp , memory_space )
 
 TEST_F( openmp , memory_pool )
 {
-  bool val = TestMemoryPool::test_mempool< Kokkos::OpenMP >( 32, 8000000 );
+  bool val = TestMemoryPool::test_mempool< Kokkos::OpenMP >( 128, 128000000 );
   ASSERT_TRUE( val );
+
+  TestMemoryPool::test_mempool2< Kokkos::OpenMP >( 128, 128000000 );
 }
 
 //----------------------------------------------------------------------------

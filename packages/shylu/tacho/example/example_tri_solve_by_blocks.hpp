@@ -37,8 +37,9 @@ namespace Tacho {
   int exampleTriSolveByBlocks(const string file_input,
                               const OrdinalType nrhs,
                               const OrdinalType nb,
+                              const int nthreads,
                               const int max_task_dependence,
-                              const int team_size, 
+                              const int team_size,
                               const bool verbose) {
     typedef ValueType   value_type;
     typedef OrdinalType ordinal_type;
@@ -52,7 +53,7 @@ namespace Tacho {
 
     typedef CrsMatrixView<CrsMatrixBaseType> CrsMatrixViewType;
     typedef TaskView<CrsMatrixViewType,TaskFactoryType> CrsTaskViewType;
-    
+
     typedef CrsMatrixBase<CrsTaskViewType,ordinal_type,size_type,SpaceType,MemoryTraits> CrsHierMatrixBaseType;
 
     typedef CrsMatrixView<CrsHierMatrixBaseType> CrsHierMatrixViewType;
@@ -117,7 +118,14 @@ namespace Tacho {
     {
       timer.reset();
 
-      GraphHelperType S(AA);
+      typename GraphHelperType::size_type_array rptr(AA.Label()+"Graph::RowPtrArray", AA.NumRows() + 1);
+      typename GraphHelperType::ordinal_type_array cidx(AA.Label()+"Graph::ColIndexArray", AA.NumNonZeros());
+
+      AA.convertGraph(rptr, cidx);
+      GraphHelperType S(AA.Label()+"ScotchHelper",
+                        AA.NumRows(),
+                        rptr,
+                        cidx);
       S.computeOrdering();
 
       CrsMatrixBaseType PA("Permuted AA");
@@ -142,11 +150,17 @@ namespace Tacho {
     }
     cout << "TriSolveByBlocks:: reorder the matrix and partition right hand side::time = " << t << endl;
 
-#ifdef __USE_FIXED_TEAM_SIZE__
-    typename TaskFactoryType::policy_type policy(max_task_dependence);
-#else
-    typename TaskFactoryType::policy_type policy(max_task_dependence, team_size);
-#endif
+    const size_t max_concurrency = 16384;
+    cout << "TriSolveByBlocks:: max concurrency = " << max_concurrency << endl;
+
+    const size_t max_task_size = 3*sizeof(CrsTaskViewType)+128;
+    cout << "TriSolveByBlocks:: max task size   = " << max_task_size << endl;
+
+    typename TaskFactoryType::policy_type policy(max_concurrency,
+                                                 max_task_size,
+                                                 max_task_dependence,
+                                                 team_size);
+
     TaskFactoryType::setMaxTaskDependence(max_task_dependence);
     TaskFactoryType::setPolicy(&policy);
 
@@ -159,7 +173,7 @@ namespace Tacho {
 
     cout << "TriSolveByBlocks:: perform forward and backward solve of the matrix" << endl;
     {
-      timer.reset(); 
+      timer.reset();
 
       auto future_forward_solve = TaskFactoryType::Policy().create_team
         (TriSolve<Uplo::Upper,Trans::ConjTranspose,AlgoTriSolve::ByBlocks>
@@ -167,7 +181,7 @@ namespace Tacho {
          (Diag::NonUnit, TU, TB), 0);
 
       TaskFactoryType::Policy().spawn(future_forward_solve);
-      
+
       auto future_backward_solve = TaskFactoryType::Policy().create_team
         (TriSolve<Uplo::Upper,Trans::NoTranspose,AlgoTriSolve::ByBlocks>
          ::TaskFunctor<CrsHierTaskViewType,DenseHierTaskViewType>
@@ -177,7 +191,7 @@ namespace Tacho {
       TaskFactoryType::Policy().spawn(future_backward_solve);
 
       Kokkos::Experimental::wait(TaskFactoryType::Policy());
-      
+
       t = timer.seconds();
 
       if (verbose)

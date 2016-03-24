@@ -58,7 +58,9 @@
 
 #include "MueLu_BoostGraphviz.hpp"
 #include "MueLu_FactoryManager.hpp"
-#include "MueLu_HierarchyHelpers.hpp"
+#include "MueLu_HierarchyUtils.hpp"
+#include "MueLu_TopRAPFactory.hpp"
+#include "MueLu_TopSmootherFactory.hpp"
 #include "MueLu_Level.hpp"
 #include "MueLu_Monitor.hpp"
 #include "MueLu_PFactory.hpp"
@@ -414,6 +416,9 @@ namespace MueLu {
     TEUCHOS_TEST_FOR_EXCEPTION(levelManagers_.size() != numLevels, Exceptions::RuntimeError,
                                "Hierarchy::SetupRe: " << Levels_.size() << " levels, but  " << levelManagers_.size() << " level factory managers");
 
+    const int startLevel = 0;
+    Clear(startLevel);
+
 #ifdef HAVE_MUELU_DEBUG
       // Reset factories' data used for debugging
       for (int i = 0; i < numLevels; i++)
@@ -422,7 +427,7 @@ namespace MueLu {
 #endif
 
     int levelID;
-    for (levelID = 0; levelID < numLevels;) {
+    for (levelID = startLevel; levelID < numLevels;) {
       bool r = Setup(levelID,
                      (levelID != 0 ? levelManagers_[levelID-1] : Teuchos::null),
                      levelManagers_[levelID],
@@ -619,7 +624,7 @@ namespace MueLu {
           emptySolve = false;
         }
         if (emptySolve == true) {
-          GetOStream(Warnings0) << "No coarse grid solver" << std::endl;
+          GetOStream(Warnings1) << "No coarse grid solver" << std::endl;
           // Coarse operator is identity
           X.update(one, B, zero);
         }
@@ -781,7 +786,7 @@ namespace MueLu {
   }
 
   template <class Scalar, class LocalOrdinal, class GlobalOrdinal, class Node>
-  void Hierarchy<Scalar, LocalOrdinal, GlobalOrdinal, Node>::Write(const LO& start, const LO& end) {
+  void Hierarchy<Scalar, LocalOrdinal, GlobalOrdinal, Node>::Write(const LO& start, const LO& end, const std::string &suffix) {
     LO startLevel = (start != -1 ? start : 0);
     LO   endLevel = (end   != -1 ? end   : Levels_.size()-1);
 
@@ -799,9 +804,9 @@ namespace MueLu {
           R = rcp_dynamic_cast<Matrix>(Levels_[i]-> template Get< RCP< Operator> >("R"));
       }
 
-      if (!A.is_null()) Xpetra::IO<Scalar, LocalOrdinal, GlobalOrdinal, Node>::Write("A_" + toString(i) + ".m", *A);
-      if (!P.is_null()) Xpetra::IO<Scalar, LocalOrdinal, GlobalOrdinal, Node>::Write("P_" + toString(i) + ".m", *P);
-      if (!R.is_null()) Xpetra::IO<Scalar, LocalOrdinal, GlobalOrdinal, Node>::Write("R_" + toString(i) + ".m", *R);
+      if (!A.is_null()) Xpetra::IO<Scalar, LocalOrdinal, GlobalOrdinal, Node>::Write("A_" + toString(i) + suffix + ".m", *A);
+      if (!P.is_null()) Xpetra::IO<Scalar, LocalOrdinal, GlobalOrdinal, Node>::Write("P_" + toString(i) + suffix + ".m", *P);
+      if (!R.is_null()) Xpetra::IO<Scalar, LocalOrdinal, GlobalOrdinal, Node>::Write("R_" + toString(i) + suffix + ".m", *R);
     }
   }
 

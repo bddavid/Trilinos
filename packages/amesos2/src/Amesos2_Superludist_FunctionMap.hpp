@@ -68,7 +68,7 @@
 
 #define AMESOS2_SLUD_GET_DIAG_SCALE(eq) (((eq)=='N') ? SLUD::NOEQUIL : ((eq)=='R') ? SLUD::ROW : ((eq)=='C') ? SLUD::COL : SLUD::BOTH)
 
-#define AMESOS2_SLUD_GET_EQUED(ds) (((ds)==SLUD::NOEQUIL) ? 'N' : ((ds)==SLUD::ROW) ? 'R' : ((ds)=='C') ? SLUD::COL : SLUD::BOTH)
+#define AMESOS2_SLUD_GET_EQUED(ds) (((ds)==SLUD::NOEQUIL) ? 'N' : ((ds)==SLUD::ROW) ? 'R' : ((ds)==SLUD::COL) ? 'C' : 'B')
 
 namespace Amesos2 {
 
@@ -398,7 +398,7 @@ namespace Amesos2 {
   };
 
 
-#ifdef HAVE_TEUCHOS_COMPLEX
+#if defined(HAVE_TEUCHOS_COMPLEX)  && !defined(__clang__)
   /* The specializations for Teuchos::as<> for SLUD::complex and
    * SLUD::doublecomplex are provided in Amesos2_Superlu_Type.hpp
    */

@@ -282,13 +282,14 @@ template <typename scalar_t>
   }
 
   os << std::setw(20) << label;
-  os << std::setw(12) << std::setprecision(4) << values_[evalGlobalMin];
-  os << std::setw(12) << std::setprecision(4) << values_[evalGlobalMax];
-  os << std::setw(12) << std::setprecision(4) << values_[evalGlobalAvg];
+  os << std::setw(11) << std::setprecision(4) << values_[evalGlobalMin];
+  os << std::setw(11) << std::setprecision(4) << values_[evalGlobalMax];
+  os << std::setw(11) << std::setprecision(4) << values_[evalGlobalAvg];
   os << std::setw(2) << " ";
-  os << std::setw(6) << std::setprecision(4) << values_[evalMinImbalance];
-  os << std::setw(6) << std::setprecision(4) << values_[evalMaxImbalance];
-  os << std::setw(6) << std::setprecision(4) << values_[evalAvgImbalance];
+  os << std::setw(10) << std::setprecision(4) << values_[evalMinImbalance];
+  os << std::setw(10) << std::setprecision(4) << values_[evalMaxImbalance];
+  os << std::setw(2) << char(177);
+  os << std::setprecision(3) << values_[evalAvgImbalance];
   os << std::endl;
 }
 
@@ -298,13 +299,13 @@ template <typename scalar_t>
   os << std::setw(20) << " ";
   os << std::setw(36) << "------------SUM PER PART-----------";
   os << std::setw(2) << " ";
-  os << std::setw(18) << "IMBALANCE PER PART";
+  os << std::setw(24) << "---IMBALANCE PER PART---";
   os << std::endl;
 
   os << std::setw(20) << " ";
-  os << std::setw(12) << "min" << std::setw(12) << "max" << std::setw(12) << "avg";
+  os << std::setw(11) << "min" << std::setw(11) << "max" << std::setw(11) << "avg";
   os << std::setw(2) << " ";
-  os << std::setw(6) << "min" << std::setw(6) << "max" << std::setw(6) << "avg";
+  os << std::setw(10) << "lightest" << std::setw(10) << "heaviest" << std::setw(6) << "avg";
   os << std::endl;
 }
 
@@ -480,12 +481,12 @@ template <typename scalar_t, typename lno_t, typename part_t>
  *   \param metrics on return points to a list of named MetricValues objects 
  *     that each contains the global min, max and avg over parts of 
  *     the item being measured. The list may contain "object count",
- *     "normed weight", "weight 1", "weight 2" and so on in that order.
+ *     "normed weight", "weight 0", "weight 1" and so on in that order.
  *     If uniform weights were given, then only "object count" appears.
  *     If one set of non-uniform weights were given, then
- *     "object count" and "weight 1" appear.  Finally, if multiple
+ *     "object count" and "weight 0" appear.  Finally, if multiple
  *     weights were given, we have "object count", then "normed weight",
- *     then the individual weights "weight 1", "weight 2", and so on.
+ *     then the individual weights "weight 0", "weight 1", and so on.
  *   \param globalSums If weights are uniform, the globalSums is the
  *      \c numParts totals of global number of objects in each part.
  *     Suppose the number of weights is \c W.  If
@@ -525,7 +526,7 @@ template <typename scalar_t, typename lno_t, typename part_t>
   numParts = numNonemptyParts = 0;
 
   int numMetrics = 1;                       // "object count"
-  if (vwgtDim) numMetrics++;                // "normed weight" or "weight 1"
+  if (vwgtDim) numMetrics++;                // "normed weight" or "weight 0"
   if (vwgtDim > 1) numMetrics += vwgtDim;   // "weight n"
 
   typedef MetricValues<scalar_t> mv_t;
@@ -578,7 +579,7 @@ template <typename scalar_t, typename lno_t, typename part_t>
 
   if (numMetrics > 1){
 
-    scalar_t *wgt = localBuf + nparts; // single normed weight or weight 1
+    scalar_t *wgt = localBuf + nparts; // single normed weight or weight 0
     try{
       normedPartWeights<scalar_t, lno_t, part_t>(env, nparts, 
         part, vwgts, mcNorm, wgt);
@@ -606,7 +607,7 @@ template <typename scalar_t, typename lno_t, typename part_t>
   next++;
 
   if (numMetrics > 1){
-    scalar_t *wgt = localBuf + nparts; // single normed weight or weight 1
+    scalar_t *wgt = localBuf + nparts; // single normed weight or weight 0
     scalar_t total = 0.0;
   
     for (int p=0; p < nparts; p++){
@@ -614,7 +615,7 @@ template <typename scalar_t, typename lno_t, typename part_t>
     }
 
     if (vwgtDim == 1)
-      metrics[next].setName("weight 1");
+      metrics[next].setName("weight 0");
     else
       metrics[next].setName("normed weight");
 
@@ -630,7 +631,7 @@ template <typename scalar_t, typename lno_t, typename part_t>
         }
 
         std::ostringstream oss;
-        oss << "weight " << vdim+1;
+        oss << "weight " << vdim;
 
         metrics[next].setName(oss.str());
         metrics[next].setLocalSum(total);
@@ -667,7 +668,7 @@ template <typename scalar_t, typename lno_t, typename part_t>
   next++;
 
   if (numMetrics > 1){
-    scalar_t *wgt = sumBuf + nparts;        // single normed weight or weight 1
+    scalar_t *wgt = sumBuf + nparts;        // single normed weight or weight 0
   
     ArrayView<scalar_t> normedWVec(wgt, nparts);
     getStridedStats<scalar_t>(normedWVec, 1, 0, min, max, sum);
@@ -725,12 +726,12 @@ template <typename scalar_t, typename lno_t, typename part_t>
  *   \param metrics on return points to a list of named GraphMetricValues cuts 
  *     that each contains the global max and sum over parts of 
  *     the item being measured. The list may contain "cut count", or
- *     "weight 1", "weight 2" and so on in that order.
+ *     "weight 0", "weight 1" and so on in that order.
  *     If uniform weights were given, then only "cut count" appears.
  *     If one set of non-uniform weights were given, then
- *     "weight 1" appear.  Finally, if multiple
+ *     "weight 0" appear.  Finally, if multiple
  *     weights were given, we have
- *     the individual weights "weight 1", "weight 2", and so on.
+ *     the individual weights "weight 0", "weight 1", and so on.
  *   \param globalSums If weights are uniform, the globalSums is the
  *      \c numParts totals of global number of cuts in each part.
  *     Suppose the number of weights is \c W.  If
@@ -762,7 +763,7 @@ template <typename Adapter>
 
   int ewgtDim = graph->getNumWeightsPerEdge();
 
-  int numMetrics = 1;                       // "cut count" or "weight 1"
+  int numMetrics = 1;                       // "cut count" or "weight 0"
   if (ewgtDim > 1) numMetrics = ewgtDim;   // "weight n"
 
   typedef typename Adapter::scalar_t scalar_t;
@@ -905,7 +906,7 @@ template <typename Adapter>
   // This code assumes the solution has the part ordered the
   // same way as the user input.  (Bug 5891 is resolved.)
   } else {
-    scalar_t *wgt = localBuf; // weight 1
+    scalar_t *wgt = localBuf; // weight 0
     for (int edim = 0; edim < ewgtDim; edim++){
       for (lno_t i=0; i < localNumObj; i++) {
 	const gno_t globalRow = Ids[i];
@@ -948,14 +949,14 @@ template <typename Adapter>
   metrics[next].setGlobalSum(sum);
 
   if (ewgtDim){
-    scalar_t *wgt = sumBuf;        // weight 1
+    scalar_t *wgt = sumBuf;        // weight 0
   
     for (int edim=0; edim < ewgtDim; edim++){
       ArrayView<scalar_t> fromVec(wgt, nparts);
       getStridedStats<scalar_t>(fromVec, 1, 0, max, sum);
 
       std::ostringstream oss;
-      oss << "weight " << edim+1;
+      oss << "weight " << edim;
 
       metrics[next].setName(oss.str());
       metrics[next].setGlobalMax(max);
@@ -1021,8 +1022,9 @@ template <typename scalar_t, typename part_t>
     for (part_t p=0; p < numParts; p++){
       scalar_t diff = vals[p] - target;
       scalar_t adiff = (diff >= 0 ? diff : -diff);
-      scalar_t tmp = adiff / target;
-      avg += tmp;
+      scalar_t tmp = diff / target;
+      scalar_t atmp = adiff / target;
+      avg += atmp;
       if (tmp > max) max = tmp;
       if (tmp < min) min = tmp;
     }
@@ -1040,8 +1042,9 @@ template <typename scalar_t, typename part_t>
           scalar_t target = sumVals * psizes[p];
           scalar_t diff = vals[p] - target;
           scalar_t adiff = (diff >= 0 ? diff : -diff);
-          scalar_t tmp = adiff / target;
-          avg += tmp;
+          scalar_t tmp = diff / target;
+          scalar_t atmp = adiff / target;
+          avg += atmp;
           if (tmp > max) max = tmp;
           if (tmp < min) min = tmp;
         }
@@ -1206,8 +1209,6 @@ template <typename scalar_t, typename part_t>
  *   \param comm  The problem communicator.
  *   \param ia the InputAdapter object which corresponds to the Solution.
  *   \param solution the PartitioningSolution to be evaluated.
- *   \param useDegreeAsWeight whether vertex degree is ever used as vertex
- *           weight.
  *   \param mcNorm  is the multicriteria norm to use if the number of weights
  *           is greater than one.  See the multiCriteriaNorm enumerator for
  *           \c mcNorm values.
@@ -1219,12 +1220,12 @@ template <typename scalar_t, typename part_t>
  *     that each contains the global min, max and avg over parts and
  *     also imbalance measures of 
  *     the item being measured. The list may contain "object count",
- *     "normed weight", "weight 1", "weight 2" and so on in that order.
+ *     "normed weight", "weight 0", "weight 1" and so on in that order.
  *     If uniform weights were given, then only "object count" appears.
  *     If one set of non-uniform weights were given, then
- *     "object count" and "weight 1" appear.  Finally, if multiple
+ *     "object count" and "weight 0" appear.  Finally, if multiple
  *     weights were given, we have "object count", then "normed weight",
- *     then the individual weights "weight 1", "weight 2", and so on.
+ *     then the individual weights "weight 0", "weight 1", and so on.
  *
  *  objectMetrics() must be called by all processes in \c comm.  
  *  See the metricOffset enumerator in the MetricValues class for the 
@@ -1237,9 +1238,8 @@ template <typename Adapter>
     const RCP<const Environment> &env,
     const RCP<const Comm<int> > &comm,
     multiCriteriaNorm mcNorm,
-    const RCP<const typename Adapter::base_adapter_t> &ia,
-    const RCP<const PartitioningSolution<Adapter> > &solution,
-    bool useDegreeAsWeight,
+    const Adapter *ia,
+    const PartitioningSolution<Adapter> *solution,
     const RCP<const GraphModel<typename Adapter::base_adapter_t> > &graphModel,
     typename Adapter::part_t &numParts,
     typename Adapter::part_t &numNonemptyParts,
@@ -1261,7 +1261,7 @@ template <typename Adapter>
   // Parts to which objects are assigned.
 
   const part_t *parts;
-  if (solution != Teuchos::null) {
+  if (solution) {
     parts = solution->getPartListView();
     env->localInputAssertion(__FILE__, __LINE__, "parts not set", 
       ((numLocalObjects == 0) || parts), BASIC_ASSERTION);
@@ -1284,13 +1284,31 @@ template <typename Adapter>
     weights[0] = sdata_t();
   }
   else{
+    // whether vertex degree is ever used as vertex weight.
+    enum BaseAdapterType adapterType = ia->adapterType();
+    bool useDegreeAsWeight = false;
+    if (adapterType == GraphAdapterType) {
+      useDegreeAsWeight = reinterpret_cast<const GraphAdapter
+	<typename Adapter::user_t, typename Adapter::userCoord_t> *>(ia)->
+	useDegreeAsWeight(0);
+    } else if (adapterType == MatrixAdapterType) {
+      useDegreeAsWeight = reinterpret_cast<const MatrixAdapter
+	<typename Adapter::user_t, typename Adapter::userCoord_t> *>(ia)->
+	useDegreeAsWeight(0);
+    } else if (adapterType == MeshAdapterType) {
+      useDegreeAsWeight =
+	reinterpret_cast<const MeshAdapter<typename Adapter::user_t> *>(ia)->
+	useDegreeAsWeight(0);
+    }
     if (useDegreeAsWeight) {
       ArrayView<const gno_t> Ids;
       ArrayView<sdata_t> vwgts;
       if (graphModel == Teuchos::null) {
 	std::bitset<NUM_MODEL_FLAGS> modelFlags;
 	RCP<GraphModel<base_adapter_t> > graph;
-	graph = rcp(new GraphModel<base_adapter_t>(ia, env, comm, modelFlags));
+	const RCP<const base_adapter_t> bia =
+	  rcp(dynamic_cast<const base_adapter_t *>(ia), false);
+	graph = rcp(new GraphModel<base_adapter_t>(bia,env,comm,modelFlags));
 	graph->getVertexList(Ids, vwgts);
       } else {
 	graphModel->getVertexList(Ids, vwgts);
@@ -1318,14 +1336,14 @@ template <typename Adapter>
 
   part_t targetNumParts = comm->getSize();
 
-  if (solution != Teuchos::null)
+  if (solution)
     targetNumParts = solution->getTargetGlobalNumberOfParts();
 
   scalar_t *psizes = NULL;
 
   ArrayRCP<ArrayRCP<scalar_t> > partSizes(numCriteria);
   for (int dim=0; dim < numCriteria; dim++){
-    if (solution != Teuchos::null)
+    if (solution)
     if (solution->criteriaHasUniformPartSizes(dim) != true){
       psizes = new scalar_t [targetNumParts];
       env->localMemoryAssertion(__FILE__, __LINE__, numParts, psizes);
@@ -1366,7 +1384,7 @@ template <typename Adapter>
 
   metrics[0].setMinImbalance(1.0 + min);
   metrics[0].setMaxImbalance(1.0 + max);
-  metrics[0].setAvgImbalance(1.0 + avg);
+  metrics[0].setAvgImbalance(avg);
 
   ///////////////////////////////////////////////////////////////////////////
   // Compute imbalances for the normed weight sum.
@@ -1382,7 +1400,7 @@ template <typename Adapter>
 
     metrics[1].setMinImbalance(1.0 + min);
     metrics[1].setMaxImbalance(1.0 + max);
-    metrics[1].setAvgImbalance(1.0 + avg);
+    metrics[1].setAvgImbalance(avg);
 
     if (metrics.size() > 2){
 
@@ -1403,7 +1421,7 @@ template <typename Adapter>
   
         metrics[next].setMinImbalance(1.0 + min);
         metrics[next].setMaxImbalance(1.0 + max);
-        metrics[next].setAvgImbalance(1.0 + avg);
+        metrics[next].setAvgImbalance(avg);
         next++;
       }
     }

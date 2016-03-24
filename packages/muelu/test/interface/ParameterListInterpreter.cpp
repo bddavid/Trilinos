@@ -94,6 +94,7 @@ int main_(Teuchos::CommandLineProcessor &clp, int argc, char *argv[]) {
   bool runHeavyTests = false;
   clp.setOption("heavytests", "noheavytests",  &runHeavyTests, "whether to exercise tests that take a long time to run");
 
+  clp.recogniseAllOptions(true);
   switch (clp.parse(argc,argv)) {
     case Teuchos::CommandLineProcessor::PARSE_HELP_PRINTED:        return EXIT_SUCCESS;
     case Teuchos::CommandLineProcessor::PARSE_ERROR:
@@ -301,6 +302,7 @@ int main_(Teuchos::CommandLineProcessor &clp, int argc, char *argv[]) {
         std::vector<std::string> classes;
         classes.push_back("Xpetra::Matrix");
         classes.push_back("MueLu::Constraint");
+        classes.push_back("MueLu::SmootherPrototype");
         for (size_t q = 0; q < classes.size(); q++)
           run_sed("'s/" + classes[q] + "<.*>/" + classes[q] + "<ignored> >/'", baseFile);
 
@@ -337,13 +339,13 @@ int main(int argc, char* argv[]) {
   bool verbose = true;
 
   try {
-    const bool throwExceptions     = false;
-    const bool recogniseAllOptions = false;
+    const bool throwExceptions = false;
 
-    Teuchos::CommandLineProcessor clp(throwExceptions, recogniseAllOptions);
+    Teuchos::CommandLineProcessor clp(throwExceptions);
     Xpetra::Parameters xpetraParameters(clp);
 
-    switch (clp.parse(argc, argv)) {
+    clp.recogniseAllOptions(false);
+    switch (clp.parse(argc, argv, NULL)) {
       case Teuchos::CommandLineProcessor::PARSE_ERROR:               return EXIT_FAILURE;
       case Teuchos::CommandLineProcessor::PARSE_HELP_PRINTED:
       case Teuchos::CommandLineProcessor::PARSE_UNRECOGNIZED_OPTION:
@@ -367,14 +369,14 @@ int main(int argc, char* argv[]) {
 #ifndef HAVE_MUELU_EXPLICIT_INSTANTIATION
       return main_<double,int,long,Node>(clp, argc, argv);
 #else
-#  if defined(HAVE_MUELU_INST_DOUBLE_INT_INT)
+#  if defined(HAVE_MUELU_INST_DOUBLE_INT_INT)           && defined(HAVE_TPETRA_INST_DOUBLE) && defined(HAVE_TPETRA_INST_INT_INT)
       return main_<double,int,int,Node> (clp, argc, argv);
-#  elif defined(HAVE_MUELU_INST_DOUBLE_INT_LONGINT)
+#  elif defined(HAVE_MUELU_INST_DOUBLE_INT_LONGINT)     && defined(HAVE_TPETRA_INST_DOUBLE) && defined(HAVE_TPETRA_INST_INT_LONG)
       return main_<double,int,long,Node>(clp, argc, argv);
-#  elif defined(HAVE_MUELU_INST_DOUBLE_INT_LONGLONGINT)
+#  elif defined(HAVE_MUELU_INST_DOUBLE_INT_LONGLONGINT) && defined(HAVE_TPETRA_INST_DOUBLE) && defined(HAVE_TPETRA_INST_INT_LONG_LONG)
       return main_<double,int,long long,Node>(clp, argc, argv);
 #  else
-      throw MueLu::Exceptions::RuntimeError("Found no suitable instantiation");
+      throw MueLu::Exceptions::RuntimeError("Found no suitable instantiation for Tpetra");
 #  endif
 #endif
 

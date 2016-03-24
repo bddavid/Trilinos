@@ -198,19 +198,16 @@ void doTest(RCP<const Comm<int> > comm, int numLocalObj,
   for (int i=0; i < nWeights; i++, wgts+=numLocalObj)
     weights.push_back(wgts);
 
-  RCP<const idInput_t> ia;
-  RCP<const base_adapter_t> bia;
+  const idInput_t *ia;
 
   try{
-    ia = rcp(new idInput_t(numLocalObj, myGids, weights, strides));
+    ia = new idInput_t(numLocalObj, myGids, weights, strides);
   }
   catch (std::exception &e){
     fail=1;
   }
 
   TEST_FAIL_AND_EXIT(*comm, fail==0, "create adapter", 1);
-
-  bia = Teuchos::rcp_implicit_cast<const base_adapter_t>(ia);
 
   // A solution (usually created by a problem)
 
@@ -239,15 +236,13 @@ void doTest(RCP<const Comm<int> > comm, int numLocalObj,
     partNum[i] = rank;
 
   solution->setParts(partAssignment);
-  RCP<const Zoltan2::PartitioningSolution<idInput_t> > solutionConst =
-    rcp_const_cast<const Zoltan2::PartitioningSolution<idInput_t> >(solution);
 
   // create metric object (also usually created by a problem)
 
   RCP<quality_t> metricObject;
 
   try{
-    metricObject = rcp(new quality_t(env, comm, bia, solutionConst, false));
+    metricObject = rcp(new quality_t(env, comm, ia, solution.getRawPtr()));
   }
   catch (std::exception &e){
     fail=1;
@@ -303,4 +298,5 @@ void doTest(RCP<const Comm<int> > comm, int numLocalObj,
   }
 
   TEST_FAIL_AND_EXIT(*comm, fail==0, "print metrics", 1);
+  delete ia;
 }

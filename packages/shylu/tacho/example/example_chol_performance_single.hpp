@@ -1,6 +1,6 @@
 #pragma once
-#ifndef __EXAMPLE_CHOL_PERFORMANCE_HPP__
-#define __EXAMPLE_CHOL_PERFORMANCE_HPP__
+#ifndef __EXAMPLE_CHOL_PERFORMANCE_SINGLE_HPP__
+#define __EXAMPLE_CHOL_PERFORMANCE_SINGLE_HPP__
 
 #include <Kokkos_Core.hpp>
 #include <impl/Kokkos_Timer.hpp>
@@ -38,20 +38,21 @@ namespace Tacho {
            typename MemoryTraits = void>
   KOKKOS_INLINE_FUNCTION
   int exampleCholPerformanceSingle(const string file_input,
-                                    const int treecut,
-                                    const int minblksize,
-                                    const int prunecut,
-                                    const int seed,
-                                    const int max_task_dependence,
-                                    const int team_size,
-                                    const int fill_level,
-                                    const int league_size,
-                                    const bool team_interface,
-                                    const bool skip_serial,
-                                    const bool vtune_symbolic,
-                                    const bool vtune_serial,
-                                    const bool vtune_task,
-                                    const bool verbose) {
+                                   const int treecut,
+                                   const int minblksize,
+                                   const int prunecut,
+                                   const int seed,
+                                   const int nthreads,
+                                   const int max_task_dependence,
+                                   const int team_size,
+                                   const int fill_level,
+                                   const int league_size,
+                                   const bool team_interface,
+                                   const bool skip_serial,
+                                   const bool vtune_symbolic,
+                                   const bool vtune_serial,
+                                   const bool vtune_task,
+                                   const bool verbose) {
     typedef ValueType   value_type;
     typedef OrdinalType ordinal_type;
     typedef SizeType    size_type;
@@ -65,7 +66,7 @@ namespace Tacho {
 
     typedef CrsMatrixView<CrsMatrixBaseType> CrsMatrixViewType;
     typedef TaskView<CrsMatrixViewType,TaskFactoryType> CrsTaskViewType;
-    
+
     typedef CrsMatrixBase<CrsTaskViewType,ordinal_type,size_type,SpaceType,MemoryTraits> CrsHierMatrixBaseType;
 
     typedef CrsMatrixView<CrsHierMatrixBaseType> CrsHierMatrixViewType;
@@ -78,15 +79,15 @@ namespace Tacho {
     int r_val = 0;
 
     Kokkos::Impl::Timer timer;
-    double 
+    double
       t_import = 0.0,
       t_reorder = 0.0,
       t_symbolic = 0.0,
       t_flat2hier = 0.0,
       t_factor_seq = 0.0,
       t_factor_task = 0.0;
-    
-    cout << "CholPerformance:: import input file = " << file_input << endl;        
+
+    cout << "CholPerformance:: import input file = " << file_input << endl;
     CrsMatrixBaseType AA("AA");
     {
       timer.reset();
@@ -106,21 +107,29 @@ namespace Tacho {
     }
     cout << "CholPerformance:: import input file::time = " << t_import << endl;
 
-    cout << "CholPerformance:: reorder the matrix" << endl;        
+    cout << "CholPerformance:: reorder the matrix" << endl;
     CrsMatrixBaseType PA("Permuted AA");
     CrsMatrixBaseType UU("UU");     // permuted base upper triangular matrix
     CrsHierMatrixBaseType HU("HU"); // hierarchical matrix of views
 
     {
-      GraphHelperType S(AA, seed);
+      typename GraphHelperType::size_type_array rptr(AA.Label()+"Graph::RowPtrArray", AA.NumRows() + 1);
+      typename GraphHelperType::ordinal_type_array cidx(AA.Label()+"Graph::ColIndexArray", AA.NumNonZeros());
+
+      AA.convertGraph(rptr, cidx);
+      GraphHelperType S(AA.Label()+"ScotchHelper",
+                        AA.NumRows(),
+                        rptr,
+                        cidx,
+                        seed);
       {
         timer.reset();
-        
+
         S.computeOrdering(treecut, minblksize);
         S.pruneTree(prunecut);
-        
+
         PA.copy(S.PermVector(), S.InvPermVector(), AA);
-        
+
         t_reorder = timer.seconds();
 
         if (verbose)
@@ -128,7 +137,7 @@ namespace Tacho {
                << PA << endl;
       }
 
-      cout << "CholPerformance:: reorder the matrix::time = " << t_reorder << endl;            
+      cout << "CholPerformance:: reorder the matrix::time = " << t_reorder << endl;
       {
         SymbolicFactorHelperType F(PA, league_size);
         if (vtune_symbolic) {
@@ -151,34 +160,40 @@ namespace Tacho {
           cout << F << endl
                << UU << endl;
       }
-      cout << "CholPerformance:: symbolic factorization::time = " << t_symbolic << endl;            
+      cout << "CholPerformance:: symbolic factorization::time = " << t_symbolic << endl;
       {
         timer.reset();
         CrsMatrixHelper::flat2hier(Uplo::Upper, UU, HU,
                                    S.NumBlocks(),
                                    S.RangeVector(),
                                    S.TreeVector());
-        
+
         for (ordinal_type k=0;k<HU.NumNonZeros();++k)
           HU.Value(k).fillRowViewArray();
-        
+
         t_flat2hier = timer.seconds();
-        
+
         cout << "CholPerformance:: Hier (dof, nnz) = " << HU.NumRows() << ", " << HU.NumNonZeros() << endl;
       }
-      cout << "CholPerformance:: construct hierarchical matrix::time = " << t_flat2hier << endl;            
+      cout << "CholPerformance:: construct hierarchical matrix::time = " << t_flat2hier << endl;
     }
 
     // copy of UU
     CrsMatrixBaseType RR("RR");
     RR.copy(UU);
 
+    const size_t max_concurrency = 16384;
+    cout << "CholPerformance:: max concurrency = " << max_concurrency << endl;
+
+    const size_t max_task_size = 3*sizeof(CrsTaskViewType)+128;
+    cout << "CholPerformance:: max task size   = " << max_task_size << endl;
+
     if (!skip_serial) {
-#ifdef __USE_FIXED_TEAM_SIZE__
-      typename TaskFactoryType::policy_type policy(max_task_dependence);
-#else
-      typename TaskFactoryType::policy_type policy(max_task_dependence, 1);
-#endif
+      typename TaskFactoryType::policy_type policy(max_concurrency,
+                                                   max_task_size,
+                                                   max_task_dependence,
+                                                   1);
+
       TaskFactoryType::setUseTeamInterface(team_interface);
       TaskFactoryType::setMaxTaskDependence(max_task_dependence);
       TaskFactoryType::setPolicy(&policy);
@@ -194,7 +209,7 @@ namespace Tacho {
           __itt_resume();
 #endif
         }
-        timer.reset();          
+        timer.reset();
         {
           Chol<Uplo::Upper,AlgoChol::UnblockedOpt,Variant::One>
             ::invoke(TaskFactoryType::Policy(),
@@ -214,15 +229,14 @@ namespace Tacho {
     }
 
     {
-#ifdef __USE_FIXED_TEAM_SIZE__
-      typename TaskFactoryType::policy_type policy(max_task_dependence);
-#else
-      typename TaskFactoryType::policy_type policy(max_task_dependence, team_size);
-#endif
+      typename TaskFactoryType::policy_type policy(max_concurrency,
+                                                   max_task_size,
+                                                   max_task_dependence,
+                                                   team_size);
       TaskFactoryType::setUseTeamInterface(team_interface);
       TaskFactoryType::setMaxTaskDependence(max_task_dependence);
       TaskFactoryType::setPolicy(&policy);
-      
+
       cout << "CholPerformance:: ByBlocks factorize the matrix:: team_size = " << team_size << endl;
       CrsHierTaskViewType H(&HU);
       {
@@ -240,19 +254,19 @@ namespace Tacho {
           Kokkos::Experimental::wait(TaskFactoryType::Policy());
         }
         t_factor_task += timer.seconds();
-        if (vtune_task) {        
+        if (vtune_task) {
 #ifdef HAVE_SHYLUTACHO_VTUNE
         __itt_pause();
 #endif
         }
         if (verbose)
           cout << UU << endl;
-      }  
+      }
       cout << "CholPerformance:: ByBlocks factorize the matrix::time = " << t_factor_task << endl;
     }
-    
+
     if (!skip_serial) {
-      cout << "CholPerformance:: task scale [seq/task] = " << t_factor_seq/t_factor_task << endl;    
+      cout << "CholPerformance:: task scale [seq/task] = " << t_factor_seq/t_factor_task << endl;
     }
 
     return r_val;

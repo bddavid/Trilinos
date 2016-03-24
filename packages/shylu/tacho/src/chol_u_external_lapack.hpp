@@ -5,7 +5,7 @@
 /// \file chol_u_external_lapack.hpp
 /// \brief BLAS Chloesky factorization.
 /// \author Kyungjoo Kim (kyukim@sandia.gov)
-
+#ifdef HAVE_SHYLUTACHO_TEUCHOS
 #include "Teuchos_LAPACK.hpp"
 
 namespace Tacho {
@@ -23,18 +23,19 @@ namespace Tacho {
     typedef typename DenseExecViewType::ordinal_type ordinal_type;
     typedef typename DenseExecViewType::value_type   value_type;
 
+    int r_val = 0;
     if (member.team_rank() == 0) {
-      const ordinal_type n = A.NumRows();
-      
-      int r_val = 0;
-      Teuchos::LAPACK<ordinal_type,value_type>::POTRF('U', 
-                                                      n, 
-                                                      A.ValuePtr(), A.BaseObject->ColStride(),
-                                                      &r_val);
+      Teuchos::LAPACK<ordinal_type,value_type> lapack;
+      lapack.POTRF('U', 
+                   A.NumRows(), 
+                   A.ValuePtr(), A.BaseObject()->ColStride(),
+                   &r_val);
     }
-    return 0;
+
+    return r_val;
   }
 
 }
 
+#endif
 #endif

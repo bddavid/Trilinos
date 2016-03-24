@@ -111,7 +111,7 @@ namespace Experimental {
 ///     // Blocks are stored in row-major format.
 ///     for (LO j = 0; j < blockSize; ++j) {
 ///       for (LO i = 0; i < blockSize; ++i) {
-///         const Scalar curVal = curBlock[i + j * blockSize];
+///         const Scalar curVal = &curBlock[i + j * blockSize];
 ///         // Some function f of the current value and mesh point
 ///         curBlock[i + j * blockSize] = f (curVal, localColInds[k], ...);
 ///       }
@@ -347,27 +347,23 @@ public:
   /// \param Solution [in/out] On input: the initial guess / current
   ///   approximate solution.  On output: the new approximate
   ///   solution.
-  /// \param factoredDiagonal [in] Block diagonal, whose blocks have
-  ///   been factored using LU with partial pivoting, and have the
-  ///   same format as that produced by LAPACK's _GETRF routine.
-  /// \param factorizationPivots [in] Pivots from the block
-  ///   factorizations
+  /// \param D_inv [in] Block diagonal, the explicit inverse of this
+  ///   matrix's block diagonal (possibly modified for algorithmic
+  ///   reasons).
   /// \param omega [in] (S)SOR relaxation coefficient
   /// \param direction [in] Forward, Backward, or Symmetric.
   ///
-  /// One may access block i in \c factoredDiagonal using the
+  /// One may access block i in \c D_inv using the
   /// following code:
   /// \code
-  /// auto D_ii = Kokkos::subview(factoredDiagonal, j, Kokkos::ALL(), Kokkos::ALL());
+  /// auto D_ii = Kokkos::subview(D_inv, i, Kokkos::ALL(), Kokkos::ALL());
   /// \endcode
   /// The resulting block is b x b, where <tt>b = this->getBlockSize()</tt>.
   void
   localGaussSeidel (const BlockMultiVector<Scalar, LO, GO, Node>& Residual,
                           BlockMultiVector<Scalar, LO, GO, Node>& Solution,
                     const Kokkos::View<impl_scalar_type***, device_type,
-                          Kokkos::MemoryUnmanaged>& factoredDiagonal,
-                    const Kokkos::View<int**, device_type,
-                          Kokkos::MemoryUnmanaged>& factorizationPivots,
+                          Kokkos::MemoryUnmanaged>& D_inv,
                     const Scalar& omega,
                     const ESweepDirection direction) const;
 
@@ -596,13 +592,13 @@ public:
   ///   has a column Map).
   /// \pre All diagonal entries of the matrix's graph must be
   ///   populated on this process.  Results are undefined otherwise.
-  /// \post <tt>offsets.size() == getNodeNumRows()</tt>
+  /// \post <tt>offsets.dimension_0() == getNodeNumRows()</tt>
   ///
   /// This method creates an array of offsets of the local diagonal
   /// entries in the matrix.  This array is suitable for use in the
   /// two-argument version of getLocalDiagCopy().  However, its
   /// contents are not defined in any other context.  For example,
-  /// you should not rely on offsets[i] being the index of the
+  /// you should not rely on \c offsets(i) being the index of the
   /// diagonal entry in the views returned by getLocalRowView().
   /// This may be the case, but it need not be.  (For example, we
   /// may choose to optimize the lookups down to the optimized
@@ -614,7 +610,17 @@ public:
   /// is fill complete, then the offsets array remains valid through
   /// calls to fillComplete() and resumeFill().  "Invalidates" means
   /// that you must call this method again to recompute the offsets.
-  void getLocalDiagOffsets (Teuchos::ArrayRCP<size_t>& offsets) const;
+  void
+  getLocalDiagOffsets (const Kokkos::View<size_t*, device_type, 
+		         Kokkos::MemoryUnmanaged>& offsets) const;
+
+  /// \brief DEPRECATED overload of this method that writes offsets to
+  ///   a Teuchos::ArrayRCP instead of a Kokkos::View.
+  ///
+  /// Please use the version of this method directly above, that
+  /// writes offsets a Kokkos::View instead of to a Teuchos::ArrayRCP.
+  void TPETRA_DEPRECATED
+  getLocalDiagOffsets (Teuchos::ArrayRCP<size_t>& offsets) const;
 
   /// \brief Variant of getLocalDiagCopy() that uses precomputed
   ///   offsets and puts diagonal blocks in a 3-D Kokkos::View.

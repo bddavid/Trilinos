@@ -62,21 +62,24 @@
 
 #include <exodusII.h>                   // for ex_inquire_int, ex_put_var, etc
 #include <stddef.h>                     // for size_t
-#include <stdio.h>                      // for sprintf, NULL, printf, etc
+#include <stdio.h>                      // for sprintf, nullptr, printf, etc
 #include <stdlib.h>                     // for calloc, free, exit
 #include <string.h>                     // for strtok, memcpy, strcat, etc
 #include <assert.h>
 #include "add_to_log.h"                 // for add_to_log
 #include "matio.h"                      // for matvar_t, Mat_VarFree, etc
+#if MATIO_VERSION < 151
+#error "MatIO Version 1.5.1 or greater is required"
+#endif
 
 /**********************************************************************/
 #if __cplusplus > 199711L
 #define TOPTR(x) x.data()
 #else
-#define TOPTR(x) (x.empty() ? NULL : &x[0])
+#define TOPTR(x) (x.empty() ? nullptr : &x[0])
 #endif
 
-mat_t *mat_file=NULL;  /* file for binary .mat input */
+mat_t *mat_file=nullptr;  /* file for binary .mat input */
 
 /**********************************************************************/
 static const char *qainfo[] =
@@ -116,7 +119,7 @@ int main (int argc, char *argv[]) {
 
   /*open input file*/
   mat_file = Mat_Open(argv[1], MAT_ACC_RDONLY);
-  if (mat_file == NULL) {
+  if (mat_file == nullptr) {
     printf("Error opening matlab file %s\n", argv[1]);
     return(1);
   }
@@ -192,12 +195,12 @@ int main (int argc, char *argv[]) {
     ex_put_coord(exo_file, TOPTR(x), TOPTR(y), TOPTR(z));
   }
 
-  std::vector<int> ids;
 
   /* side sets */
   std::vector<int> num_sideset_sides(num_side_sets);
   if(num_side_sets > 0) {
 
+    std::vector<int> ids;
     matGetInt("ssids",num_side_sets, 1, ids);
     matGetInt("nsssides",num_side_sets,1,num_sideset_sides);
     std::vector<int> nssdfac(num_side_sets);
@@ -229,6 +232,7 @@ int main (int argc, char *argv[]) {
   std::vector<int> num_nodeset_nodes;
   if(num_node_sets > 0) {
 
+    std::vector<int> ids;
     matGetInt("nsids",num_node_sets, 1, ids);
     matGetInt("nnsnodes",num_node_sets,1,num_nodeset_nodes);
     std::vector<int> nnsdfac;
@@ -243,7 +247,7 @@ int main (int argc, char *argv[]) {
 
       sprintf(name,"nsnod%02d",i+1);
       matGetInt(name,num_nodeset_nodes[i],1,node_list);
-      ex_put_set(exo_file,EX_NODE_SET,ids[i], TOPTR(node_list),NULL);
+      ex_put_set(exo_file,EX_NODE_SET,ids[i], TOPTR(node_list),nullptr);
 
       sprintf(name,"nsfac%02d",i+1);
       matGetDbl(name,nnsdfac[i],1,dist_fact);
@@ -253,29 +257,32 @@ int main (int argc, char *argv[]) {
 
 
   /* element blocks */
-  matGetInt("blkids",num_blocks,1, ids);
-
-  /* get elem block types */
-  char *blknames = (char *) calloc(num_blocks*(MAX_STR_LENGTH+1),sizeof(char));
-  matGetStr("blknames",blknames);
   std::vector<int> num_elem_in_block(num_blocks);
-  std::vector<int> connect;
-  char *curr = blknames;
-  curr = strtok(curr,"\n");
-  for (int i=0; i<num_blocks; i++) {
-    char name[32];
+  {
+    std::vector<int> ids;
+    matGetInt("blkids",num_blocks,1, ids);
 
-    sprintf(name,"blk%02d",i+1);
-    int num_node_per_elem = matArrNRow(name);
-    num_elem_in_block[i]  = matArrNCol(name);
-    matGetInt(name,num_node_per_elem, num_elem_in_block[i],connect);
+    /* get elem block types */
+    char *blknames = (char *) calloc(num_blocks*(MAX_STR_LENGTH+1),sizeof(char));
+    matGetStr("blknames",blknames);
+    std::vector<int> connect;
+    char *curr = blknames;
+    curr = strtok(curr,"\n");
+    for (int i=0; i<num_blocks; i++) {
+      char name[32];
 
-    ex_put_block(exo_file, EX_ELEM_BLOCK, ids[i], curr,
-                 num_elem_in_block[i], num_node_per_elem, 0, 0, 0);
-    ex_put_conn(exo_file,EX_ELEM_BLOCK,ids[i], TOPTR(connect),NULL,NULL);
-    curr = strtok(NULL, "\n");
+      sprintf(name,"blk%02d",i+1);
+      int num_node_per_elem = matArrNRow(name);
+      num_elem_in_block[i]  = matArrNCol(name);
+      matGetInt(name,num_node_per_elem, num_elem_in_block[i],connect);
+      
+      ex_put_block(exo_file, EX_ELEM_BLOCK, ids[i], curr,
+		   num_elem_in_block[i], num_node_per_elem, 0, 0, 0);
+      ex_put_conn(exo_file,EX_ELEM_BLOCK,ids[i], TOPTR(connect),nullptr,nullptr);
+      curr = strtok(nullptr, "\n");
+    }
+    free(blknames);
   }
-  free(blknames);
 
   /* time values */
   if (num_time_steps > 0) {
@@ -320,6 +327,7 @@ int main (int argc, char *argv[]) {
 
   /* element variables */
   if (num_element_vars > 0) {
+    std::vector<int> ids;
     matGetInt("blkids",num_blocks,1, ids);
     get_put_names(exo_file, EX_ELEM_BLOCK, num_element_vars, "enames");
 
@@ -329,6 +337,7 @@ int main (int argc, char *argv[]) {
 
   /* nodeset variables */
   if (num_nodeset_vars > 0) {
+    std::vector<int> ids;
     matGetInt("nsids",num_node_sets, 1, ids);
     get_put_names(exo_file, EX_NODE_SET, num_nodeset_vars, "nsnames");
 
@@ -338,6 +347,7 @@ int main (int argc, char *argv[]) {
 
   /* sideset variables */
   if (num_sideset_vars > 0) {
+    std::vector<int> ids;
     matGetInt("ssids",num_side_sets, 1, ids);
     get_put_names(exo_file, EX_SIDE_SET, num_sideset_vars, "ssnames");
 
@@ -346,12 +356,18 @@ int main (int argc, char *argv[]) {
   }
 
   /* node and element number maps */
-  if ( !matGetInt("node_num_map",num_nodes,1, ids)) {
-    ex_put_node_num_map(exo_file,TOPTR(ids));
+  {
+    std::vector<int> ids;
+    if ( !matGetInt("node_num_map",num_nodes,1, ids)) {
+      ex_put_node_num_map(exo_file,TOPTR(ids));
+    }
   }
 
-  if ( !matGetInt("elem_num_map",num_elements,1,ids)) {
-    ex_put_elem_num_map(exo_file,TOPTR(ids));
+  {
+    std::vector<int> ids;
+    if ( !matGetInt("elem_num_map",num_elements,1,ids)) {
+      ex_put_elem_num_map(exo_file,TOPTR(ids));
+    }
   }
 
   ex_close(exo_file);
@@ -367,7 +383,7 @@ int main (int argc, char *argv[]) {
 int matGetStr (const char *name,char *data)
 {
   matvar_t *matvar = Mat_VarRead(mat_file, name);
-  if (matvar == NULL)
+  if (matvar == nullptr)
     return -1;
 
   int strlen = matvar->nbytes;
@@ -385,7 +401,7 @@ int matGetStr (const char *name,char *data)
 int matGetDbl (const char *name,size_t n1,size_t n2, std::vector<double> &data)
 {
     matvar_t *matvar = Mat_VarRead(mat_file, name);
-    if (matvar == NULL)
+    if (matvar == nullptr)
       return -1;
 
     assert(matvar->dims[0] == n1);
@@ -402,7 +418,7 @@ int matGetDbl (const char *name,size_t n1,size_t n2, std::vector<double> &data)
 int matGetInt (const char *name,size_t n1,size_t n2, std::vector<int> &data)
 {
     matvar_t *matvar = Mat_VarRead(mat_file, name);
-    if (matvar == NULL)
+    if (matvar == nullptr)
       return -1;
 
     assert(matvar->dims[0] == n1);
@@ -419,7 +435,7 @@ int matGetInt (const char *name,size_t n1,size_t n2, std::vector<int> &data)
 int matGetInt (const char *name)
 {
   matvar_t *matvar = Mat_VarRead(mat_file, name);
-  if (matvar == NULL)
+  if (matvar == nullptr)
     return -1;
 
   assert(matvar->dims[0] == 1);
@@ -435,7 +451,7 @@ int matGetInt (const char *name)
 int matArrNRow (const char *name)
 {
   matvar_t *matvar = Mat_VarRead(mat_file, name);
-  if (matvar == NULL)
+  if (matvar == nullptr)
     return -1;
 
   int nrow = matvar->dims[0];
@@ -447,7 +463,7 @@ int matArrNRow (const char *name)
 int matArrNCol (const char *name)
 {
   matvar_t *matvar = Mat_VarRead(mat_file, name);
-  if (matvar == NULL)
+  if (matvar == nullptr)
     return -1;
 
   int ncol = matvar->dims[1];
@@ -464,7 +480,7 @@ void del_arg(int *argc, char* argv[], int j)
     argv[jj-1]=argv[jj];
   }
   (*argc)--;
-  argv[*argc]=0;
+  argv[*argc]=nullptr;
 }
 
 void get_put_names(int exo_file, ex_entity_type entity, int num_vars, const std::string &name)
@@ -477,7 +493,7 @@ void get_put_names(int exo_file, ex_entity_type entity, int num_vars, const std:
   char *curr = strtok(str,"\n");
   for (int i=0; i<num_vars; i++) {
     str2[i]=curr;
-    curr = strtok(NULL,"\n");
+    curr = strtok(nullptr,"\n");
   }
   ex_put_variable_names(exo_file, entity, num_vars, str2);
   free(str);

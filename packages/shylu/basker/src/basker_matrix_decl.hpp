@@ -72,7 +72,8 @@ namespace BaskerNS
     void clean_col();
     BASKER_INLINE
     void convert2D(BASKER_MATRIX &M, 
-		   BASKER_BOOL alloc = BASKER_TRUE);
+		   BASKER_BOOL alloc, 
+		   Int kid);
 
     
     //just set shape, do not init
@@ -82,6 +83,11 @@ namespace BaskerNS
 
     BASKER_INLINE
     int fill();
+
+    BASKER_INLINE
+    void init_inc_lvl();
+
+
 
     //****Deprecated*******
     BASKER_INLINE
@@ -137,6 +143,7 @@ namespace BaskerNS
    
    
     //#ifdef BASKER_INC_LVL
+    BASKER_BOOL   inc_lvl_flg;
     INT_1DARRAY   inc_lvl;
     //#endif
 

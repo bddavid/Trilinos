@@ -3,7 +3,7 @@
 
 //#define BASKER_DEBUG_NFACTOR 
 
-#define BASKER_TIME
+//#define BASKER_TIME
 
 /*Basker Includes*/
 #include "basker_types.hpp"
@@ -76,16 +76,10 @@ namespace BaskerNS
 
     if(Options.btf == BASKER_TRUE)
       {
-
 	//JDB: We can change this for the new inteface
-
-	//call reference copy constructor
 	gn = A.ncol;
 	gm = A.nrow;
 	A = BTF_A; 
-	//printf("\n\n Switching A, newsize: %d \n",
-	//   A.ncol);
-	//printMTX("A_FACTOR.mtx", A);
       }
    
 
@@ -104,6 +98,7 @@ namespace BaskerNS
     if(btf_tabs_offset != 0)
       {
 
+	Int domain_restart = 0;
     kokkos_nfactor_domain <Int,Entry,Exe_Space>
       domain_nfactor(this);
     Kokkos::parallel_for(TeamPolicy(num_threads,1), 
@@ -120,12 +115,14 @@ namespace BaskerNS
 		   (Int) BASKER_MAX_IDX);
 	int nt = nfactor_domain_error(thread_start);
 	if((nt == BASKER_SUCCESS) ||
-	   (nt == BASKER_ERROR))
+	   (nt == BASKER_ERROR) ||
+	   (domain_restart > BASKER_RESTART))
 	  {
 	    break;
 	  }
 	else
 	  {
+	    domain_restart++;
 	    printf("restart \n");
 	    kokkos_nfactor_domain_remalloc <Int, Entry, Exe_Space>
 	      diag_nfactor_remalloc(this, thread_start);
@@ -180,6 +177,8 @@ namespace BaskerNS
 	Int lnteams = num_threads/lthreads;
 	//#endif
 
+	Int sep_restart = 0;
+
 	#ifdef BASKER_KOKKOS
 	Kokkos::Impl::Timer  timer_inner_sep;
 	#ifdef BASKER_NO_LAMBDA
@@ -193,6 +192,33 @@ namespace BaskerNS
 	Kokkos::parallel_for(TeamPolicy(lnteams,lthreads),
 			     sep_nfactor);
 	Kokkos::fence();
+
+	//======Check for error=====
+	while(true)
+	  {
+	    INT_1DARRAY thread_start;
+	    MALLOC_INT_1DARRAY(thread_start, num_threads+1);
+	    init_value(thread_start, num_threads+1,
+		      (Int) BASKER_MAX_IDX);
+	    int nt = nfactor_sep_error(thread_start);
+	    if((nt == BASKER_SUCCESS)||
+	       (nt == BASKER_ERROR) ||
+	       (sep_restart > BASKER_RESTART))
+	      {
+		FREE_INT_1DARRAY(thread_start);
+		break;
+	      }
+	    else
+	      {
+		sep_restart++;
+		printf("restart \n");
+		Kokkos::parallel_for(TeamPolicy(lnteams,lthreads),  sep_nfactor);
+		Kokkos::fence();
+
+	      }
+	  }//end while-true
+
+
 	#ifdef BASKER_TIME
 	printf("Time INNERSEP: %d %f \n", 
 	       l, timer_inner_sep.seconds());
@@ -219,6 +245,8 @@ namespace BaskerNS
     //-------------------IF BTF-----------------------//
     if(Options.btf == BASKER_TRUE)
       {
+
+	Int btf_restart = 0;
 	//=====Timer
 	#ifdef BASKER_TIME
 	Kokkos::Impl::Timer  timer_btf;
@@ -242,12 +270,14 @@ namespace BaskerNS
 	    int nt = nfactor_diag_error(thread_start);
 	    //printf("RETURNED: %d \n", nt);
 	    if((nt == BASKER_SUCCESS) || 
-	       (nt == BASKER_ERROR))
+	       (nt == BASKER_ERROR) ||
+	       (btf_restart > BASKER_RESTART))
 	      {
 		break;
 	      }
 	    else
 	      {
+		btf_restart++;
 		printf("restart \n");
 		kokkos_nfactor_diag_remalloc <Int, Entry, Exe_Space>
 		  diag_nfactor_remalloc(this, thread_start);

@@ -42,7 +42,8 @@ namespace Ioss { class ElementTopology; }
 
 
 namespace Ioss {
-  typedef std::vector<std::string> NameList;
+  enum class ElementShape {UNKNOWN, POINT, LINE, TRI, QUAD, TET, PYRAMID, WEDGE, HEX};
+
   typedef std::map<std::string, ElementTopology*,
     std::less<std::string> > ElementTopologyMap;
   typedef ElementTopologyMap::value_type ETM_VP;
@@ -64,8 +65,9 @@ namespace Ioss {
   // ========================================================================
   class ElementTopology {
   public:
+    
     void alias(const std::string& base, const std::string& syn);
-    bool is_alias(const std::string &alias) const;
+    bool is_alias(const std::string &my_alias) const;
 
     virtual ~ElementTopology();
 
@@ -76,6 +78,9 @@ namespace Ioss {
     //: and Sierra, but least klugy I could think of...
     std::string master_element_name() const {return masterElementName_;}
 
+    //: Return basic shape...
+    virtual ElementShape shape() const = 0;
+    
     //: Return whether the topology describes an "element". If it
     //: isn't an element, then it is a component of an element.  For
     //example, a quadrilater Shell is an element, but a QuadFace is
@@ -126,7 +131,7 @@ namespace Ioss {
     static int describe(NameList *names);
 
   protected:
-    ElementTopology(const std::string& type, const std::string& master_elem_name,
+    ElementTopology(std::string  type, std::string  master_elem_name,
 		    bool delete_me=false);
 
   private:

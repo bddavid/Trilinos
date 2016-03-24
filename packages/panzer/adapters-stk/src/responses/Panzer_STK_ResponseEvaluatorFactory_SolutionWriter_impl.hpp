@@ -93,6 +93,10 @@ buildAndRegisterEvaluators(const std::string & responseName,
   else if(addSolutionFields_)
     allFields.insert(allFields.end(),physicsBlock.getProvidedDOFs().begin(),physicsBlock.getProvidedDOFs().end());
 
+  // Add in tangent fields
+  if(addSolutionFields_)
+    allFields.insert(allFields.end(),physicsBlock.getTangentFields().begin(),physicsBlock.getTangentFields().end());
+
   // add in bases for any addtional fields
   for(std::size_t i=0;i<additionalFields_.size();i++)
     bases[additionalFields_[i].second->name()] = additionalFields_[i].second;
@@ -179,7 +183,6 @@ buildAndRegisterEvaluators(const std::string & responseName,
 
       // add a DOF_PointValues for each field
       std::string fields_concat = "";
-      std::vector<std::string> pointFields;
       for(std::size_t f=0;f<fields.size();f++) {
         Teuchos::ParameterList p;
         p.set("Name",fields[f]);
@@ -190,16 +193,14 @@ buildAndRegisterEvaluators(const std::string & responseName,
 
         this->template registerEvaluator<EvalT>(fm, evaluator);
 
-        pointFields.push_back(fields[f]+"_"+centroidRule->getName());
-
         fields_concat += fields[f];
       }
 
       // add the scatter field evaluator for this basis
       {
         Teuchos::RCP<PHX::Evaluator<panzer::Traits> > evaluator  
-           = Teuchos::rcp(new panzer_stk_classic::ScatterVectorFields<EvalT,panzer::Traits>("STK HCURL Scatter Basis " +basis->name()+": "+fields_concat,
-                                                                              mesh_,centroidRule,fields));
+           = Teuchos::rcp(new ScatterVectorFields<EvalT,panzer::Traits>("STK HCURL Scatter Basis " +basis->name()+": "+fields_concat,
+                                                                        mesh_,centroidRule,fields));
 
         this->template registerEvaluator<EvalT>(fm, evaluator);
         fm.template requireField<EvalT>(*evaluator->evaluatedFields()[0]); // require the dummy evaluator
@@ -217,7 +218,6 @@ buildAndRegisterEvaluators(const std::string & responseName,
 
       // add a DOF_PointValues for each field
       std::string fields_concat = "";
-      std::vector<std::string> pointFields;
       for(std::size_t f=0;f<fields.size();f++) {
         Teuchos::ParameterList p;
         p.set("Name",fields[f]);
@@ -228,16 +228,14 @@ buildAndRegisterEvaluators(const std::string & responseName,
 
         this->template registerEvaluator<EvalT>(fm, evaluator);
 
-        pointFields.push_back(fields[f]+"_"+centroidRule->getName());
-
         fields_concat += fields[f];
       }
 
       // add the scatter field evaluator for this basis
       {
         Teuchos::RCP<PHX::Evaluator<panzer::Traits> > evaluator  
-           = Teuchos::rcp(new panzer_stk_classic::ScatterVectorFields<EvalT,panzer::Traits>("STK HDIV Scatter Basis " +basis->name()+": "+fields_concat,
-                                                                              mesh_,centroidRule,fields));
+           = Teuchos::rcp(new ScatterVectorFields<EvalT,panzer::Traits>("STK HDIV Scatter Basis " +basis->name()+": "+fields_concat,
+                                                                        mesh_,centroidRule,fields));
 
         this->template registerEvaluator<EvalT>(fm, evaluator);
         fm.template requireField<EvalT>(*evaluator->evaluatedFields()[0]); // require the dummy evaluator

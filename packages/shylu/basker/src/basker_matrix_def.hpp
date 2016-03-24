@@ -14,7 +14,7 @@
 
 
 #include <iostream>
-using namespace std;
+//using namespace std;
 
 namespace BaskerNS
 {
@@ -32,6 +32,7 @@ namespace BaskerNS
     p_size  = 0;
     w_fill  = BASKER_FALSE;
     #endif
+    inc_lvl_flg = BASKER_FALSE;
     //printf("matrix init\n");
   }//end BaskerMatrix()
 
@@ -49,6 +50,7 @@ namespace BaskerNS
     p_size  = 0;
     w_fill  = BASKER_FALSE;
     #endif
+    inc_lvl_flg = BASKER_FALSE;
   }//end BaskerMatrix(label)
 
   template <class Int, class Entry, class Exe_Space>
@@ -111,6 +113,13 @@ namespace BaskerNS
         FREE_ENTRY_1DARRAY(ews);
         w_fill = BASKER_FALSE;
       }
+
+    if(inc_lvl_flg == BASKER_TRUE)
+      {
+	FREE_INT_1DARRAY(inc_lvl);
+	inc_lvl_flg = BASKER_FALSE;
+      }
+    
 
   }//end finalize()
 
@@ -432,12 +441,15 @@ namespace BaskerNS
         val(i) = 0;
       }
 
-    #ifdef BASKER_INC_LVL
+    //#ifdef BASKER_INC_LVL
+    if(inc_lvl_flg == BASKER_TRUE)
+      {
     for(Int i = 0; i < nnz; i++)
       {
 	inc_lvl(i) = 0;
       }
-    #endif
+      }
+    //#endif
 
     v_fill = BASKER_TRUE;
     return 0;
@@ -448,7 +460,8 @@ namespace BaskerNS
   void BaskerMatrix<Int,Entry,Exe_Space>::convert2D
   (
    BASKER_MATRIX &M,
-   BASKER_BOOL   alloc
+   BASKER_BOOL   alloc,
+   Int kid
    )
   {
 
@@ -518,7 +531,6 @@ namespace BaskerNS
     for(Int k = scol; k < scol+ncol; ++k)
       {
 	//note col_ptr[k-scol] contains the starting index
-
 	if(col_ptr(k-scol) == BASKER_MAX_IDX)
 	  {
 	    col_ptr(k-scol) = temp_count;
@@ -543,9 +555,9 @@ namespace BaskerNS
 
 	    if(j-srow <0)
 	      {
-		printf("j: %ld srow: %ld k: %d idx: %d   \n",
-		       j, srow, k, i);
-		BASKER_ASSERT(0==1, "NO");
+		printf("kid: %d j: %ld srow: %ld k: %d idx: %d   \n",
+		       kid, j, srow, k, i);
+		BASKER_ASSERT(0==1, "j-srow NO");
 	      }
 
 
@@ -571,6 +583,20 @@ namespace BaskerNS
     //print();
     
   }//end convert2d(Matrix)
+
+  template <class Int, class Entry, class Exe_Space>
+  BASKER_INLINE
+  void BaskerMatrix<Int,Entry,Exe_Space>::init_inc_lvl()
+  {
+
+    MALLOC_INT_1DARRAY(inc_lvl, nnz+1);
+    //for(Int i = 0; i < nnz+1; i++)
+    //  {
+    //	inc_lvl(i) = 0; 
+    // }
+    inc_lvl_flg = BASKER_TRUE;
+
+  }
 
   template <class Int, class Entry, class Exe_Space>
   BASKER_INLINE

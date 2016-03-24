@@ -11,6 +11,7 @@
 #include "basker_matrix_view_def.hpp"
 #include "basker_tree.hpp"
 #include "basker_sfactor.hpp"
+#include "basker_sfactor_inc.hpp"
 #include "basker_nfactor.hpp"
 #include "basker_nfactor_inc.hpp"
 #include "basker_solve_rhs.hpp"
@@ -37,16 +38,17 @@ namespace BaskerNS
   Basker<Int, Entry, Exe_Space>::Basker()
   {   
     //Presetup flags
-    matrix_flag    = BASKER_FALSE;
-    order_flag     = BASKER_FALSE;
-    tree_flag      = BASKER_FALSE;
-    symb_flag      = BASKER_FALSE;
-    factor_flag    = BASKER_FALSE;
-    workspace_flag = BASKER_FALSE;
-    rhs_flag       = BASKER_FALSE;
-    solve_flag     = BASKER_FALSE;
-    nd_flag        = BASKER_FALSE;
-    amd_flag       = BASKER_FALSE;
+    matrix_flag       = BASKER_FALSE;
+    order_flag        = BASKER_FALSE;
+    tree_flag         = BASKER_FALSE;
+    symb_flag         = BASKER_FALSE;
+    factor_flag       = BASKER_FALSE;
+    workspace_flag    = BASKER_FALSE;
+    rhs_flag          = BASKER_FALSE;
+    solve_flag        = BASKER_FALSE;
+    nd_flag           = BASKER_FALSE;
+    amd_flag          = BASKER_FALSE;
+    same_pattern_flag = BASKER_FALSE;
 
     //Default number of threads
     num_threads = 1;
@@ -67,7 +69,6 @@ namespace BaskerNS
   BASKER_INLINE
   void Basker<Int,Entry,Exe_Space>::Finalize()
   {
-
     
     //finalize all matrices
     A.Finalize();
@@ -77,7 +78,6 @@ namespace BaskerNS
     BTF_B.Finalize();
     BTF_D.Finalize();
     BTF_E.Finalize();
-
    
     //finalize array of 2d matrics
     FREE_MATRIX_VIEW_2DARRAY(AV, tree.nblks);
@@ -97,14 +97,11 @@ namespace BaskerNS
     FREE_INT_1DARRAY(btf_blk_nnz);
     FREE_MATRIX_1DARRAY(LBTF);
     FREE_MATRIX_1DARRAY(UBTF);
-   
-
-    
+       
     //Thread Array
     FREE_THREAD_1DARRAY(thread_array);
     basker_barrier.Finalize();
-    
-    
+       
     //S (Check on this)
     FREE_INT_2DARRAY(S, tree.nblks);
     
@@ -138,14 +135,13 @@ namespace BaskerNS
     stree.Finalize();
     stats.Finalize();
 
-    /*
-    */
   }//end Finalize()
 
   template <class Int, class Entry, class Exe_Space>
   BASKER_INLINE
   int Basker<Int, Entry, Exe_Space>::InitMatrix(string filename)
-  {    
+  { 
+    //Note: jdb comeback to add trans option
     readMTX(filename, A);
     A.srow = 0;
     A.scol = 0;
@@ -159,6 +155,7 @@ namespace BaskerNS
 					       Int *col_ptr,
 					       Int *row_idx, Entry *val)
   {
+    //Note: jdb comeback to add trans option
     A.init_matrix("Original Matrix",
 		  nrow, ncol, nnz, col_ptr, row_idx, val);
     A.scol = 0;
@@ -193,7 +190,7 @@ namespace BaskerNS
 	return -1;
       }
 
-    basker_barrier.init(num_threads, 16, tree.nlvls );
+    basker_barrier.init(num_threads, 16, tree.nlvls);
 
     order_flag = true;
     return 0;
@@ -279,6 +276,7 @@ namespace BaskerNS
 	         Int nnz, Int *col_ptr, Int *row_idx, Entry *val)
   {
 
+    // printf("befor symbolic\n");
     //Init Matrix A.
     if(matrix_flag == BASKER_TRUE)
       {
@@ -287,12 +285,41 @@ namespace BaskerNS
       }
     else
       {
-	A.init_matrix("Original Matrix",
+
+	//Kokkos::Impl::Timer timer_move;
+
+	if(Options.transpose == BASKER_FALSE)
+	  {
+	    //printf("=======NO TRANS=====\n");
+	    A.init_matrix("Original Matrix",
 		  nrow, ncol, nnz, col_ptr, row_idx, val);
-	A.scol = 0;
-	A.srow = 0;
+	    A.scol = 0;
+	    A.srow = 0;
+	    
+	  }
+	else
+	  {
+	    //printf("======TRANS=====\n");
+	    //Will transpose and put in A using little extra
+	    matrix_transpose(0, nrow,
+			     0, ncol,
+			     nnz,
+			     col_ptr,
+			     row_idx,
+			     val,
+			     A);
+	  }
 	sort_matrix(A);
+
+	if(Options.verbose_matrix_out == BASKER_TRUE)
+	  {
+	    printMTX("A_Symbolic.mtx", A);
+	  }
+
 	matrix_flag = BASKER_TRUE;
+
+	//std::cout << "Transpose A: " << timer_move.seconds()
+	//	  << std::endl;
       }
 
     //Init Ordering
@@ -305,14 +332,32 @@ namespace BaskerNS
       }
     else
       {
-	printf("btf_order called \n");
+	//printf("btf_order called \n");
 	//btf_order();
+	
+	Kokkos::Impl::Timer timer_order;
+	/*
+	if(Options.incomplete == BASKER_TRUE)
+	  {
+	    order_incomplete();
+	  }
+	else
+	  {
+	    btf_order2();
+	  }
+	*/
 	btf_order2();
-	if(btf_tabs_offset != 0)
+	//if(btf_tabs_offset != 0)
+	if((Options.btf == BASKER_TRUE) &&
+	   (btf_tabs_offset != 0))
 	  {
 	    basker_barrier.init(num_threads, 16, tree.nlvls );
 	  }
 	order_flag = BASKER_TRUE;
+	//std::cout << "Time Order/Init arrays " 
+	//	  << timer_order.seconds()
+	//	  << std::endl;
+
 	//printf("btf_order done \n");
       }
 
@@ -329,7 +374,17 @@ namespace BaskerNS
       }
     else
       {
-	sfactor();
+	
+       
+	if(Options.incomplete == BASKER_FALSE)
+	  {
+	    sfactor();
+	  }
+	else
+	  {
+	    sfactor_inc();
+	  }
+	
 	symb_flag = BASKER_TRUE;
       }
 
@@ -366,8 +421,53 @@ namespace BaskerNS
   int Basker<Int,Entry,Exe_Space>::Factor(Int nrow, Int ncol,
 	        Int nnz, Int *col_ptr, Int *row_idx, Entry *val) 
   {
+
+    int err = 0;
     
-    int err = A.copy_values(nrow, ncol, nnz, col_ptr, row_idx, val);
+    /*
+    int err = A.copy_values(nrow, ncol, nnz, col_ptr, 
+			    row_idx, val);
+    */
+
+    if((Options.same_pattern == BASKER_TRUE) &&
+       (Options.no_pivot == BASKER_FALSE))
+      {
+	printf("Warning: Same Pattern will not allow pivoting\n");
+	Options.no_pivot = BASKER_TRUE;
+      }
+
+ 			    
+    if(Options.transpose == BASKER_FALSE)
+      {
+	//printf("=======NO TRANS=====\n");
+	//A.init_matrix("Original Matrix",
+	//	      nrow, ncol, nnz, col_ptr, row_idx, val);
+	//A.scol = 0;
+	//A.srow = 0;
+	A.copy_values(nrow, ncol, nnz, col_ptr,
+		      row_idx, val);
+	//printf("Copy done\n");
+	//printMTX("A_LOAD.mtx", A);
+      }
+    else
+      {
+	//printf("======TRANS=====\n");
+	//Will transpose and put in A using little extra
+	matrix_transpose(0, nrow,
+			 0, ncol,
+			 nnz,
+			 col_ptr,
+			 row_idx,
+			 val,
+			 A);
+      }
+    sort_matrix(A);
+    if(Options.verbose_matrix_out == BASKER_TRUE)
+      {
+	printMTX("A_Factor.mtx", A);
+      }
+    matrix_flag = BASKER_TRUE;
+	
 
     if(err == BASKER_ERROR)
       {
@@ -382,9 +482,13 @@ namespace BaskerNS
       }
     //printf("before notoken\n");
 
+    //Kokkos::Impl::Timer timer;
+   
+
     if(Options.incomplete == BASKER_FALSE)    
       {
 	err = factor_notoken(0);
+	//printf("Notoken called\n");
       }
     else
       {
@@ -395,6 +499,11 @@ namespace BaskerNS
 	return BASKER_ERROR;
       }
 
+    /*
+    std::cout << "Raw Factor Time: "
+	      << timer.seconds()
+	      << std::endl;
+    */
     
     //DEBUG_PRINT();
 
@@ -406,6 +515,7 @@ namespace BaskerNS
   int Basker<Int,Entry,Exe_Space>::Factor_Inc(Int Options)
   {
     factor_inc_lvl(Options);
+    return 0;
   }
 
 
@@ -474,8 +584,34 @@ namespace BaskerNS
   BASKER_INLINE
   int Basker<Int, Entry, Exe_Space>::SetThreads(Int nthreads)
   {
+    //Need to test if power of 2.
+    if((nthreads != 1) && 
+       (nthreads%2 != 0))
+      {
+	BASKER_ASSERT(0==1, 
+		      "Number of thread error");
+	//Set default 1
+	num_threads = 1;
+	return BASKER_ERROR;
+      }
+
+    //Next test if Kokkos has that many threads!
+    //This is a common mistake in mpi-based apps
+    #ifdef KOKKOS_HAVE_OPENMP
+    int check_value = Kokkos::OpenMP::max_hardware_threads();
+    if(nthreads > check_value)
+      {
+        BASKER_ASSERT(0==1,
+                      "Number of thread not aval in Kokkos");
+        num_threads =  1;
+        return BASKER_ERROR;
+      }
+    #else
+    nthreads = 1;
+    #endif
+
     num_threads = nthreads;
-    return 0;
+    return BASKER_SUCCESS;
   }//end SetThreads()
 
   //Return nnz of L
@@ -587,11 +723,13 @@ namespace BaskerNS
 
     #ifdef BASKER_2DL
     printL2D();
+    printLMTX();
     #else
     //printL();
     #endif
     std::cout << "L printed " << std::endl;
     printU();
+    printUMTX();
     std::cout << "U printed" << std::endl;
     //printRHS();
     std::cout << "RHS printed" << std::endl;
@@ -599,6 +737,31 @@ namespace BaskerNS
     std::cout << "SOL printed" << std::endl;
     //printTree();
     std::cout << "Tree printed" << std::endl;
+
+    //Print out vectors
+    if(match_flag == BASKER_TRUE)
+      {
+    printVec("match.csc", order_match_array,
+	     order_match_array.dimension_0());
+      }
+    if(btf_flag == BASKER_TRUE)
+      {
+    printVec("btf.csc", order_btf_array,
+	     order_btf_array.dimension_0());
+    printVec("amdblk.csc", order_blk_amd_array,
+	     order_blk_amd_array.dimension_0());
+      }
+    if(btf_tabs_offset != 0)
+      {
+	printVec("ND.csc", part_tree.permtab, 
+		 part_tree.permtab.dimension_0());
+      }
+    if(amd_flag == BASKER_TRUE)
+      {
+	printVec("camd.csc", order_csym_array,
+		 order_csym_array.dimension_0());
+      }
+
     
   }//end DEBUG_PRINT()
 

@@ -35,9 +35,8 @@
 // NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// Questions? Contact Pavel Bochev  (pbboche@sandia.gov)
-//                    Denis Ridzal  (dridzal@sandia.gov), or
-//                    Kara Peterson (kjpeter@sandia.gov)
+// Questions? Contact Kyungjoo Kim  (kyukim@sandia.gov), or
+//                    Mauro Perego  (mperego@sandia.gov)
 //
 // ************************************************************************
 // @HEADER
@@ -69,7 +68,7 @@ rankValue=1;
 intepidManaged=true;
 sizeValue=1;
 containerMemory=new Scalar[sizeValue];
-this->initialize();
+//this->initialize();
 }
 
 
@@ -101,7 +100,7 @@ rankValue=1;
 sizeValue=dim_0;
 delete[] containerMemory;
 containerMemory=new Scalar[sizeValue];
-this->initialize();
+//this->initialize();
 }
 void resize(index_type dim_0,index_type dim_1){
 if(!intepidManaged){
@@ -120,7 +119,7 @@ rankValue=2;
 sizeValue=dim_0*dim_1;
 delete[] containerMemory;
 containerMemory=new Scalar[sizeValue];
-this->initialize();
+//this->initialize();
 }
 void resize(index_type dim_0,index_type dim_1,index_type dim_2){
 if(!intepidManaged){
@@ -140,7 +139,7 @@ rankValue=3;
 sizeValue=dim_0*dim_1*dim_2;
 delete[] containerMemory;
 containerMemory=new Scalar[sizeValue];
-this->initialize();
+//this->initialize();
 }
 void resize(index_type dim_0,index_type dim_1,index_type dim_2,index_type dim_3){
 if(!intepidManaged){
@@ -159,7 +158,7 @@ rankValue=4;
 sizeValue=dim_0*dim_1*dim_2*dim_3;
 delete[] containerMemory;
 containerMemory=new Scalar[sizeValue];
-this->initialize();
+//this->initialize();
 }
 
 
@@ -180,7 +179,7 @@ rankValue=5;
 sizeValue=dim_0*dim_1*dim_2*dim_3*dim_4;
 delete[] containerMemory;
 containerMemory=new Scalar[sizeValue];
-this->initialize();
+//this->initialize();
 }
 void resize(index_type dim_0,index_type dim_1,index_type dim_2,index_type dim_3,index_type dim_4,index_type dim_5){
 if(!intepidManaged){
@@ -199,7 +198,7 @@ rankValue=6;
 sizeValue=dim_0*dim_1*dim_2*dim_3*dim_4*dim_5;
 delete[] containerMemory;
 containerMemory=new Scalar[sizeValue];
-this->initialize();
+//this->initialize();
 }
 
 void resize(index_type dim_0,index_type dim_1,index_type dim_2,index_type dim_3,index_type dim_4,index_type dim_5,index_type dim_6){
@@ -220,7 +219,7 @@ sizeValue=dim_0*dim_1*dim_2*dim_3*dim_4*dim_5*dim_6;
 
 delete[] containerMemory;
 containerMemory=new Scalar[sizeValue];
-this->initialize();
+//this->initialize();
 }
 void resize(index_type dim_0,index_type dim_1,index_type dim_2,index_type dim_3,index_type dim_4,index_type dim_5,index_type dim_6,index_type dim_7){
 if(!intepidManaged){
@@ -238,7 +237,7 @@ rankValue=8;
 sizeValue=dim_0*dim_1*dim_2*dim_3*dim_4*dim_5*dim_6;
 delete[] containerMemory;
 containerMemory=new Scalar[sizeValue];
-this->initialize();
+//this->initialize();
 }
 
 void resize(const Teuchos::Array<int>& newDimensions);
@@ -256,6 +255,8 @@ FieldContainer_Kokkos(const FieldContainer_Kokkos& inContainer);
 ~FieldContainer_Kokkos();
 
 typedef Kokkos::Threads execution_space;
+  typedef Kokkos::RangePolicy<execution_space,Kokkos::Schedule<Kokkos::Static> > range_policy;
+
 template<class ScalarPoindex_typeer>
 FieldContainer_Kokkos(Kokkos::View<ScalarPoindex_typeer,Kokkos::LayoutRight,Kokkos::Threads>& InContainer){
 dim0=dim[0]=InContainer.dimension(0);
@@ -383,12 +384,13 @@ index_type dimension_6()const{return dim6;}
 index_type dimension_7()const{return dim7;}
 
 void initialize(Scalar initValue){
-Kokkos::parallel_for(sizeValue,initFieldContKokkos<Scalar>(initValue,containerMemory));
+
+  Kokkos::parallel_for(range_policy(0, sizeValue),initFieldContKokkos<Scalar>(initValue,containerMemory));
 }
 
 void initialize(){
 Scalar initValue=Scalar(0.0);
-Kokkos::parallel_for(sizeValue,initFieldContKokkos<Scalar>(initValue,containerMemory));
+ Kokkos::parallel_for(range_policy(0, sizeValue),initFieldContKokkos<Scalar>(initValue,containerMemory));
 }
 
 };
@@ -543,7 +545,7 @@ void FieldContainer_Kokkos<Scalar,Kokkos::LayoutRight,Kokkos::Threads>::resize(c
        std::cerr <<"FieldContainer_Kokkos can't have more than 8 dimentions"<<std::endl;
     }
   }
-  this->initialize();
+  //this->initialize();
 }
 
 
@@ -595,7 +597,7 @@ rankValue=1;
 intepidManaged=true;
 sizeValue=dim_0;
 containerMemory=new Scalar[sizeValue];
-this->initialize();
+//this->initialize();
 }
 
 template <class Scalar>
@@ -607,7 +609,7 @@ rankValue=2;
 intepidManaged=true;
 sizeValue=dim_0*dim_1;
 containerMemory=new Scalar[sizeValue];
-this->initialize();
+//this->initialize();
 }
 template <class Scalar>
 FieldContainer_Kokkos<Scalar,Kokkos::LayoutRight,Kokkos::Threads>::FieldContainer_Kokkos(index_type dim_0,index_type dim_1,index_type dim_2){
@@ -619,7 +621,7 @@ rankValue=3;
 intepidManaged=true;
 sizeValue=dim_0*dim_1*dim_2;
 containerMemory=new Scalar[sizeValue];
-this->initialize();
+//this->initialize();
 }
 
 template <class Scalar>
@@ -633,7 +635,7 @@ rankValue=4;
 intepidManaged=true;
 sizeValue=dim_0*dim_1*dim_2*dim_3;
 containerMemory=new Scalar[sizeValue];
-this->initialize();
+//this->initialize();
 }
 
 template <class Scalar>
@@ -648,7 +650,7 @@ rankValue=5;
 intepidManaged=true;
 sizeValue=dim_0*dim_1*dim_2*dim_3*dim_4;
 containerMemory=new Scalar[sizeValue];
-this->initialize();
+//this->initialize();
 }
 
 template <class Scalar>
@@ -664,7 +666,7 @@ rankValue=6;
 intepidManaged=true;
 sizeValue=dim_0*dim_1*dim_2*dim_3*dim_4*dim_5;
 containerMemory=new Scalar[sizeValue];
-this->initialize();
+//this->initialize();
 }
 template <class Scalar>
 FieldContainer_Kokkos<Scalar,Kokkos::LayoutRight,Kokkos::Threads>::FieldContainer_Kokkos(index_type dim_0,index_type dim_1,index_type dim_2,index_type dim_3,index_type dim_4,index_type dim_5,index_type dim_6){
@@ -680,7 +682,7 @@ rankValue=7;
 intepidManaged=true;
 sizeValue=dim_0*dim_1*dim_2*dim_3*dim_4*dim_5*dim_6;
 containerMemory=new Scalar[sizeValue];
-this->initialize();
+//this->initialize();
 }
 
 
@@ -699,7 +701,7 @@ rankValue=8;
 intepidManaged=true;
 sizeValue=dim_0*dim_1*dim_2*dim_3*dim_4*dim_5*dim_6*dim_7;
 containerMemory=new Scalar[sizeValue];
-this->initialize();
+//this->initialize();
 }
 
 

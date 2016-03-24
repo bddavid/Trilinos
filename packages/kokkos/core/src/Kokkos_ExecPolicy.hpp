@@ -262,20 +262,6 @@ public:
 
   /** \brief  Total range */
   inline
-  RangePolicy( const member_type work_begin
-             , const member_type work_end
-             )
-    : m_space()
-    , m_begin( work_begin < work_end ? work_begin : 0 )
-    , m_end(   work_begin < work_end ? work_end : 0 )
-    , m_granularity(0)
-    , m_granularity_mask(0)
-    {
-      set_auto_chunk_size();
-    }
-
-  /** \brief  Total range */
-  inline
   RangePolicy( const typename traits::execution_space & work_space
              , const member_type work_begin
              , const member_type work_end
@@ -288,6 +274,15 @@ public:
     {
       set_auto_chunk_size();
     }
+
+  /** \brief  Total range */
+  inline
+  RangePolicy( const member_type work_begin
+             , const member_type work_end
+             )
+    : RangePolicy( typename traits::execution_space()
+                 , work_begin , work_end )
+    {}
 
   public:
 
@@ -309,6 +304,8 @@ public:
      inline void set_auto_chunk_size() {
 
        typename traits::index_type concurrency = traits::execution_space::concurrency();
+       if( concurrency==0 ) concurrency=1;
+
        if(m_granularity > 0) {
          if(!Impl::is_integral_power_of_two( m_granularity ))
            Kokkos::abort("RangePolicy blocking granularity must be power of two" );

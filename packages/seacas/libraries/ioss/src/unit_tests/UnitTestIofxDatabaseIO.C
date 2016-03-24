@@ -64,14 +64,6 @@ TEST(Iofx, test_constructor)
 
     EXPECT_TRUE(db_io->ok());
 
-    int64_t id = 1;
-    std::vector<std::string> block_membership;
-    db_io->compute_block_membership(id, block_membership);
-
-    ASSERT_EQ(2u, block_membership.size());
-    EXPECT_EQ("block_1", block_membership[0]);
-    EXPECT_EQ("block_2", block_membership[1]);
-
     int spatial_dim = db_io->spatial_dimension();
     EXPECT_EQ(3, spatial_dim);
 
@@ -208,12 +200,8 @@ TEST(Iofx, test_constructor)
         for (size_t j=0;j<sidesets[i]->block_count();++j)
         {
             Ioss::SideBlock *block = sidesets[i]->get_block(j);
-            std::vector<int64_t> face_ids_per_block;
             std::vector<int64_t> side_ids_per_block;
             std::vector<int64_t> connectivity_per_block;
-
-            ASSERT_TRUE(block->field_exists("ids"));
-            block->get_field_data("ids", face_ids_per_block);
 
             ASSERT_TRUE(block->field_exists("element_side_raw"));
             block->get_field_data("element_side", side_ids_per_block);

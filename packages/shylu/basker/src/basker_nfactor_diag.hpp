@@ -1,7 +1,6 @@
 #ifndef BASKER_NFACTOR_DIAG_HPP
 #define BASKER_NFACTOR_DIAG_HPP
 
-
 #include "basker_matrix_decl.hpp"
 #include "basker_matrix_view_decl.hpp"
 #include "basker_matrix_view_def.hpp"
@@ -44,8 +43,8 @@ namespace BaskerNS
       Int kid = (Int)(thread.league_rank()*
 		      thread.team_size()+
 		      thread.team_rank());
-      Int total_threads = thread.league_size()*
-	thread.team_size();
+      //Int total_threads = thread.league_size()*
+      //	thread.team_size(); //Not used
 
 
       //================OLD EQ BLK=================//
@@ -83,11 +82,13 @@ namespace BaskerNS
 	basker->btf_schedule(kid);
       
 
-      printf("Chunk start: %d size: %d \n", 
-	     chunk_start, chunk_size);
+      //printf("Chunk start: %d size: %d \n", 
+      //     chunk_start, chunk_size);
+      if(chunk_size > 0)
+	{
       basker->t_nfactor_diag(kid, chunk_start,
 			     chunk_size);
-
+	}
 
 
 
@@ -129,8 +130,8 @@ namespace BaskerNS
       Int kid = (Int)(thread.league_rank()*
 		      thread.team_size()+
 		      thread.team_rank());
-      Int total_threads = thread.league_size()*
-	thread.team_size();
+      //Int total_threads = thread.league_size()*
+      //thread.team_size(); //Not used
 
 
       Int chunk_start = thread_start(kid);
@@ -201,7 +202,7 @@ namespace BaskerNS
    )
   {  
     Int bcol = BTF_C.scol;
-    Int brow = BTF_C.srow;
+    //Int brow = BTF_C.srow;
     Int btab = btf_tabs_offset;
     
     BASKER_MATRIX  &M = BTF_C;
@@ -216,9 +217,13 @@ namespace BaskerNS
 
     //printf("kid: %d chunk: %d col: %d bcol: %d j: %d\n",
     //	   kid, c, k, bcol, j);
-    //printf("Single blk slv, kid: %d val:%f idx:%d \n",
-    //	   kid, M.val[j], M.row_idx[j]);
-    
+    //printf("Single blk slv, kid: %d val:%f idx:%d %d \n",
+    //	   kid, M.val[j], M.row_idx[j], M.srow);
+
+    if(M.val(j) == 0)
+      {
+	printf("Error, zero diag in single factor\n");
+      }
     
     U.val(0)     = M.val(j);
     //M already has local idxing
@@ -249,7 +254,7 @@ namespace BaskerNS
    )
   {
     Int bcol = BTF_C.scol;
-    Int brow = BTF_C.srow;
+    //Int brow = BTF_C.srow;
     Int btab = btf_tabs_offset;
     
     BASKER_MATRIX  &M = BTF_C;
@@ -287,9 +292,9 @@ namespace BaskerNS
 
     Int llnnz  = L.nnz;
     Int uunnz  = U.nnz;
-    Entry maxv;
+    Entry maxv = (Entry) 0;
 
-    Int maxindex;
+    Int maxindex = 0;
 
     Int i,j, t;
     Int cu_ltop = 0;
@@ -300,8 +305,9 @@ namespace BaskerNS
     unnz = 0;
     lnnz = 0;
     
-    //printf("c: %d kid: %d ws_size: %d \n", c, kid, ws_size);
 
+
+    //printf("c: %d kid: %d ws_size: %d \n", c, kid, ws_size);
     //for each column
     for(Int k = btf_tabs(c); k < btf_tabs(c+1); ++k)
       {
@@ -325,7 +331,7 @@ namespace BaskerNS
 	    BASKER_ASSERT(ws[i] == 0, "ws!=0");
 	  }
 	  }
-	 #endif
+	  #endif
 
 	value = 0.0;
 	pivot = 0.0;
@@ -355,16 +361,17 @@ namespace BaskerNS
 	    X(j) = M.val(i);
 	    
             #ifdef BASKER_DEBUG_NFACTOR_DIAG
-	    if(k  < 3)
+	    //if(k  < 3)
 	      {
 		printf("In put j: %d %d %g \n", 
 		       M.row_idx(i), j, M.val(i));
 	      }
-	    #endif
+	     #endif
 	    
-            #ifdef BASKER_DEBUG_NFACTOR_DIAG
-	    printf("i: %d row: %d %d  val: %g  top: %d \n", 
-		   i, j , gperm(j+L.srow),M.val[i], top);
+	    #ifdef BASKER_DEBUG_NFACTOR_DIAG
+	    printf("i: %d row: %d %d %d  val: %g  top: %d \n", 
+		   i, j , gperm(j+L.srow), j+L.srow, 
+		   M.val(i), top);
 	    printf("Nx in Ak %d %g %d color = %d \n",
                       j, X[j], brow,  
                      color[j] );
@@ -372,9 +379,6 @@ namespace BaskerNS
 
 	    if(color[j] == 0)
 	      {
-
-		
-
 		if(gperm(j+L.srow) != BASKER_MAX_IDX)
 		  {
 		    t_local_reach_btf(kid, L, 0, 0, j, top);
@@ -408,7 +412,7 @@ namespace BaskerNS
 	    value = X(j);
 
 	    #ifdef BASKER_DEBUG_NFACTOR_DIAG
-	    if(k < 3)
+	    //if(k < 3)
 	      {
 		printf("consider, %d %d %d %g \n", 
 		       j, j+L.scol, t, value);
@@ -431,12 +435,12 @@ namespace BaskerNS
           //printf("b: %d lcnt: %d after \n", b, lcnt);
 	
 	#ifdef BASKER_DEBUG_NFACTOR_DIAG
-	if(k < 3)
+	//if(k < 3)
 	  {
 	    printf("pivot: %g maxindex: %d \n",
 		   pivot, maxindex);
 	  }
-	#endif
+	  #endif
 	
 
 	  if(Options.no_pivot == BASKER_TRUE)
@@ -447,13 +451,15 @@ namespace BaskerNS
 	    }
 	
 	  #ifdef BASKER_DEBUG_NFACTOR_DEBUG
-	  if(k < 3)
+	  //if(k < 3)
 	    {
 	      printf("pivot: %g maxindex: %d \n",
 		     pivot, maxindex);
 	    }
 	  #endif
   
+	   
+
           ucnt = ws_size - top - lcnt +1;
          
 	  if((maxindex == BASKER_MAX_IDX) || (pivot == 0))
@@ -557,9 +563,8 @@ namespace BaskerNS
 
             }
 
-          //L.row_idx[lnnz] = maxindex;
+
 	  L.row_idx(lnnz) = maxindex;
-          //L.val[lnnz] = (Entry) 1.0;
 	  L.val(lnnz)     = (Entry) 1.0;
           ++lnnz;
      
@@ -569,24 +574,15 @@ namespace BaskerNS
           for( i = top; i < ws_size; i++)
             {
 	      j = pattern[i];
-              //t = gperm[j];
-	      //t = gperm(j+brow);
-	      //t = gperm(j+brow2);
 	      t = gperm(j+L.srow);
             
               #ifdef BASKER_DEBUG_NFACTOR_DIAG
               printf("j: %d t: %d \n", j, t);
               #endif            
 
-              //if fill-in
-	      #ifdef BASKER_2DL
-	      //if(X[j-brow] != 0)
-	      if(X(j) != 0)
-	      #else
-              if(X[j] != 0)
-	      #endif
+            
                 {
-                  //if(t != L.max_idx)
+            
 		  if(t != BASKER_MAX_IDX)
                     {
                       if(t < k)
@@ -652,6 +648,10 @@ namespace BaskerNS
           //Fill in last element of U
 	  U.row_idx(unnz) = k - L.scol;
 	  U.val(unnz)       = lastU;
+	  if(lastU == 0)
+	    {
+	      printf("diag btf zero, error \n");
+	    }
           ++unnz;
 
           xnnz = 0;
@@ -730,7 +730,7 @@ namespace BaskerNS
  
     Int brow        = L.srow;
     
-    Int *color       = &(ws(0));
+    //Int *color       = &(ws(0));
     Int *pattern     = &(ws(ws_size));
     Int *stack       = &(pattern[ws_size]);
     Int *store       = &(stack[ws_size]);

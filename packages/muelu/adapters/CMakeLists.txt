@@ -87,6 +87,7 @@ ENDIF()
 SET_AND_INC_DIRS(DIR ${CMAKE_CURRENT_SOURCE_DIR}/xpetra)
 APPEND_SET(HEADERS
   ${CMAKE_CURRENT_SOURCE_DIR}/xpetra/MueLu_XpetraOperator_decl.hpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/xpetra/MueLu_CreateXpetraPreconditioner.hpp
 )
 
 #
@@ -175,6 +176,7 @@ IF(${PACKAGE_NAME}_ENABLE_EXPLICIT_INSTANTIATION)
   IF (${PACKAGE_NAME}_ENABLE_Stratimikos)
     APPEND_GLOBAL_SET(MUELUADAPTERS_ETI_CLASSES
       Thyra::MueLuPreconditionerFactory
+      Thyra::XpetraLinearOp
     )
   ENDIF()
 

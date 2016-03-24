@@ -129,7 +129,15 @@ public:
 
   KOKKOS_INLINE_FUNCTION
   const execution_space::scratch_memory_space & team_shmem() const
-    { return m_team_shared ; }
+    { return m_team_shared.set_team_thread_mode(1,0) ; }
+
+  KOKKOS_INLINE_FUNCTION
+  const execution_space::scratch_memory_space & team_scratch(int) const
+    { return m_team_shared.set_team_thread_mode(1,0) ; }
+
+  KOKKOS_INLINE_FUNCTION
+  const execution_space::scratch_memory_space & thread_scratch(int) const
+    { return m_team_shared.set_team_thread_mode(team_size(),team_rank()) ; }
 
   KOKKOS_INLINE_FUNCTION int league_rank() const { return m_league_rank ; }
   KOKKOS_INLINE_FUNCTION int league_size() const { return m_league_size ; }
@@ -659,6 +667,7 @@ private:
   inline void set_auto_chunk_size() {
 
     int concurrency = traits::execution_space::thread_pool_size(0)/m_team_alloc;
+    if( concurrency==0 ) concurrency=1;
 
     if(m_chunk_size > 0) {
       if(!Impl::is_integral_power_of_two( m_chunk_size ))

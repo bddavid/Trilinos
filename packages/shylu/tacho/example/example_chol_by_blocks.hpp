@@ -31,9 +31,10 @@ namespace Tacho {
            typename MemoryTraits = void>
   KOKKOS_INLINE_FUNCTION
   int exampleCholByBlocks(const string file_input,
-                           const int max_task_dependence,
-                           const int team_size,
-			   const bool verbose) {
+                          const int nthreads,
+                          const int max_task_dependence,
+                          const int team_size,
+                          const bool verbose) {
     typedef ValueType   value_type;
     typedef OrdinalType ordinal_type;
     typedef SizeType    size_type;
@@ -46,7 +47,7 @@ namespace Tacho {
 
     typedef CrsMatrixView<CrsMatrixBaseType> CrsMatrixViewType;
     typedef TaskView<CrsMatrixViewType,TaskFactoryType> CrsTaskViewType;
-    
+
     typedef CrsMatrixBase<CrsTaskViewType,ordinal_type,size_type,SpaceType,MemoryTraits> CrsHierMatrixBaseType;
 
     typedef CrsMatrixView<CrsHierMatrixBaseType> CrsHierMatrixViewType;
@@ -57,7 +58,7 @@ namespace Tacho {
     Kokkos::Impl::Timer timer;
     double t = 0.0;
 
-    cout << "CholByBlocks:: import input file = " << file_input << endl;        
+    cout << "CholByBlocks:: import input file = " << file_input << endl;
     CrsMatrixBaseType AA("AA");
     {
       timer.reset();
@@ -78,13 +79,20 @@ namespace Tacho {
     cout << "CholByBlocks:: import input file::time = " << t << endl;
 
 
-    cout << "CholByBlocks:: reorder the matrix" << endl;        
+    cout << "CholByBlocks:: reorder the matrix" << endl;
     CrsMatrixBaseType UU("UU");     // permuted base matrix
     CrsHierMatrixBaseType HU("HU"); // hierarchical matrix of views
     {
       timer.reset();
 
-      GraphHelperType S(AA);
+      typename GraphHelperType::size_type_array rptr(AA.Label()+"Graph::RowPtrArray", AA.NumRows() + 1);
+      typename GraphHelperType::ordinal_type_array cidx(AA.Label()+"Graph::ColIndexArray", AA.NumNonZeros());
+
+      AA.convertGraph(rptr, cidx);
+      GraphHelperType S(AA.Label()+"ScotchHelper",
+                        AA.NumRows(),
+                        rptr,
+                        cidx);
       S.computeOrdering();
 
       CrsMatrixBaseType PA("Permuted AA");
@@ -96,22 +104,28 @@ namespace Tacho {
                                  S.NumBlocks(),
                                  S.RangeVector(),
                                  S.TreeVector());
-      
+
       for (ordinal_type k=0;k<HU.NumNonZeros();++k)
         HU.Value(k).fillRowViewArray();
-      
+
       t = timer.seconds();
 
       if (verbose)
         cout << UU << endl;
     }
-    cout << "CholByBlocks:: reorder the matrix::time = " << t << endl;            
+    cout << "CholByBlocks:: reorder the matrix::time = " << t << endl;
 
-#ifdef __USE_FIXED_TEAM_SIZE__
-    typename TaskFactoryType::policy_type policy(max_task_dependence);
-#else
-    typename TaskFactoryType::policy_type policy(max_task_dependence, team_size);
-#endif
+    const size_t max_concurrency = 16384;
+    cout << "CholByBlocks:: max concurrency = " << max_concurrency << endl;
+
+    const size_t max_task_size = 3*sizeof(CrsTaskViewType)+128;
+    cout << "CholByBlocks:: max task size   = " << max_task_size << endl;
+
+    typename TaskFactoryType::policy_type policy(max_concurrency,
+                                                 max_task_size,
+                                                 max_task_dependence,
+                                                 team_size);
+
     TaskFactoryType::setMaxTaskDependence(max_task_dependence);
     TaskFactoryType::setPolicy(&policy);
 
@@ -129,7 +143,7 @@ namespace Tacho {
 
       if (verbose)
         cout << UU << endl;
-    }  
+    }
     cout << "CholByBlocks:: factorize the matrix::time = " << t << endl;
 
     return r_val;

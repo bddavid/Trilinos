@@ -345,15 +345,7 @@ namespace Experimental {
   BlockCrsMatrix<Scalar, LO, GO, Node>::
   setAllToScalar (const Scalar& alpha)
   {
-    const LO numLocalMeshRows = static_cast<LO> (rowMeshMap_.getNodeNumElements ());
-    for (LO lclRow = 0; lclRow < numLocalMeshRows; ++lclRow) {
-      const size_t meshBeg = ptr_[lclRow];
-      const size_t meshEnd = ptr_[lclRow+1];
-      for (size_t absBlkOff = meshBeg; absBlkOff < meshEnd; ++absBlkOff) {
-        little_block_type A_cur = getNonConstLocalBlockFromAbsOffset (absBlkOff);
-        deep_copy (A_cur, static_cast<impl_scalar_type> (alpha));
-      }
-    }
+    Kokkos::deep_copy (valView_, alpha);
   }
 
   template<class Scalar, class LO, class GO, class Node>
@@ -413,9 +405,55 @@ namespace Experimental {
   template <class Scalar, class LO, class GO, class Node>
   void
   BlockCrsMatrix<Scalar,LO,GO,Node>::
-  getLocalDiagOffsets (Teuchos::ArrayRCP<size_t>& offsets) const
+  getLocalDiagOffsets (const Kokkos::View<size_t*, device_type,
+                         Kokkos::MemoryUnmanaged>& offsets) const
   {
     graph_.getLocalDiagOffsets (offsets);
+  }
+
+  template <class Scalar, class LO, class GO, class Node>
+  void TPETRA_DEPRECATED
+  BlockCrsMatrix<Scalar,LO,GO,Node>::
+  getLocalDiagOffsets (Teuchos::ArrayRCP<size_t>& offsets) const
+  {
+    // mfh 19 Mar 2016: We plan to deprecate the ArrayRCP version of
+    // this method in CrsGraph too, so don't call it (otherwise build
+    // warnings will show up and annoy users).  Instead, copy results
+    // in and out, if the memory space requires it.
+
+    const size_t lclNumRows = graph_.getNodeNumRows ();
+    if (static_cast<size_t> (offsets.size ()) < lclNumRows) {
+      offsets.resize (lclNumRows);
+    }
+
+    // Kokkos #178 (closed because it was considered a question, not
+    // because it was resolved) talks about how the first argument
+    // of this metafunction (despite its name) must be a memory
+    // space, not an execution space.
+    using Kokkos::Impl::VerifyExecutionCanAccessMemorySpace;
+    const bool canReachHost =
+      VerifyExecutionCanAccessMemorySpace<typename device_type::memory_space,
+                                          Kokkos::HostSpace>::value;
+    if (canReachHost) {
+      // This matrix's execution space can access host memory.  Thus,
+      // we don't need to copy.
+      //
+      // It is always syntactically correct to assign a raw host
+      // pointer to a device View, so this code will compile correctly
+      // (though never execute) even if canReachHost is false.
+      typedef Kokkos::View<size_t*, device_type,
+                           Kokkos::MemoryUnmanaged> output_type;
+      output_type offsetsOut (offsets.getRawPtr (), lclNumRows);
+      graph_.getLocalDiagOffsets (offsetsOut);
+    }
+    else {
+      Kokkos::View<size_t*, device_type> offsetsTmp ("diagOffsets", lclNumRows);
+      graph_.getLocalDiagOffsets (offsetsTmp);
+      typedef Kokkos::View<size_t*, Kokkos::HostSpace,
+                           Kokkos::MemoryUnmanaged> output_type;
+      output_type offsetsOut (offsets.getRawPtr (), lclNumRows);
+      Kokkos::deep_copy (offsetsOut, offsetsTmp);
+    }
   }
 
   template <class Scalar, class LO, class GO, class Node>
@@ -424,14 +462,15 @@ namespace Experimental {
   localGaussSeidel (const BlockMultiVector<Scalar, LO, GO, Node>& B,
                     BlockMultiVector<Scalar, LO, GO, Node>& X,
                     const Kokkos::View<impl_scalar_type***, device_type,
-                          Kokkos::MemoryUnmanaged>& factoredDiagonal,
-                    const Kokkos::View<int**, device_type,
-                          Kokkos::MemoryUnmanaged>& factorizationPivots,
+                      Kokkos::MemoryUnmanaged>& D_inv,
                     const Scalar& omega,
                     const ESweepDirection direction) const
   {
     using Kokkos::ALL;
-
+    const impl_scalar_type zero =
+      Kokkos::Details::ArithTraits<impl_scalar_type>::zero ();
+    const impl_scalar_type one =
+      Kokkos::Details::ArithTraits<impl_scalar_type>::one ();
     const LO numLocalMeshRows =
       static_cast<LO> (rowMeshMap_.getNodeNumElements ());
     const LO numVecs = static_cast<LO> (X.getNumVectors ());
@@ -458,8 +497,8 @@ namespace Experimental {
       rowStride = -1;
     }
     else if (direction == Symmetric) {
-      this->localGaussSeidel (B, X, factoredDiagonal, factorizationPivots, omega, Forward);
-      this->localGaussSeidel (B, X, factoredDiagonal, factorizationPivots, omega, Backward);
+      this->localGaussSeidel (B, X, D_inv, omega, Forward);
+      this->localGaussSeidel (B, X, D_inv, omega, Backward);
       return;
     }
 
@@ -480,7 +519,6 @@ namespace Experimental {
           const LO meshCol = ind_[absBlkOff];
           const_little_block_type A_cur =
             getConstLocalBlockFromAbsOffset (absBlkOff);
-
           little_vec_type X_cur = X.getLocalBlock (meshCol, 0);
 
           // X_lcl += alpha*A_cur*X_cur
@@ -492,13 +530,10 @@ namespace Experimental {
         // NOTE (mfh 20 Jan 2016) The two input Views here are
         // unmanaged already, so we don't have to take unmanaged
         // subviews first.
-        auto D_lcl = Kokkos::subview (factoredDiagonal, actlRow, ALL (), ALL ());
-        auto ipiv = Kokkos::subview (factorizationPivots, actlRow, ALL ());
-        int info = 0;
-        GETRS ("N", D_lcl, ipiv, X_lcl, info);
-
+        auto D_lcl = Kokkos::subview (D_inv, actlRow, ALL (), ALL ());
         little_vec_type X_update = X.getLocalBlock (actlRow, 0);
-        COPY (X_lcl, X_update);
+        FILL (X_update, zero);
+        GEMV (one, D_lcl, X_lcl, X_update); // overwrite X_update
       } // for each local row of the matrix
     }
     else {
@@ -516,7 +551,6 @@ namespace Experimental {
             const LO meshCol = ind_[absBlkOff];
             const_little_block_type A_cur =
               getConstLocalBlockFromAbsOffset (absBlkOff);
-
             little_vec_type X_cur = X.getLocalBlock (meshCol, j);
 
             // X_lcl += alpha*A_cur*X_cur
@@ -524,17 +558,10 @@ namespace Experimental {
             GEMV (alpha, A_cur, X_cur, X_lcl);
           } // for each entry in the current local row of the matrx
 
-          // FIXME (mfh 16 Dec 2015) Get an unmanaged subview of
-          // factoredDiagonal BEFORE getting its subview!  This will
-          // avoid reference counting overhead, which introduces a
-          // scalability bottleneck.
-          auto D_lcl = Kokkos::subview (factoredDiagonal, actlRow, ALL (), ALL ());
-          auto ipiv = Kokkos::subview (factorizationPivots, actlRow, ALL ());
-          int info = 0;
-          GETRS ("N", D_lcl, ipiv, X_lcl, info);
-
-          little_vec_type X_update = X.getLocalBlock (actlRow, j);
-          COPY (X_lcl, X_update);
+          auto D_lcl = Kokkos::subview (D_inv, actlRow, ALL (), ALL ());
+          auto X_update = X.getLocalBlock (actlRow, j);
+          FILL (X_update, zero);
+          GEMV (one, D_lcl, X_lcl, X_update); // overwrite X_update
         } // for each entry in the current local row of the matrix
       } // for each local row of the matrix
     }
@@ -1146,7 +1173,7 @@ namespace Experimental {
         little_vec_type Y_cur = Y.getLocalBlock (lclRow, 0);
 
         if (beta == zero) {
-          deep_copy (Y_lcl, zero);
+          FILL (Y_lcl, zero);
         } else if (beta == one) {
           COPY (Y_cur, Y_lcl);
         } else {
@@ -1175,7 +1202,7 @@ namespace Experimental {
           little_vec_type Y_cur = Y.getLocalBlock (lclRow, j);
 
           if (beta == zero) {
-            deep_copy (Y_lcl, zero);
+            FILL (Y_lcl, zero);
           } else if (beta == one) {
             COPY (Y_cur, Y_lcl);
           } else {
@@ -2409,18 +2436,22 @@ namespace Experimental {
     }
 
     size_t offset = 0;
+    bool errorDuringUnpack = false;
     for (size_type i = 0; i < numImportLIDs; ++i) {
       const size_t numBytes = numPacketsPerLID[i];
       if (numBytes == 0) {
-        // Empty buffer for that row means that the row is empty.
-        continue;
+        continue; // empty buffer for that row means that the row is empty
       }
       const size_t numEnt =
-        unpackRowCount<ST, LO, GO, HES> (importsK, offset, numBytes, numBytesPerValue);
+        unpackRowCount<ST, LO, GO, HES> (importsK, offset, numBytes,
+                                         numBytesPerValue);
       if (numEnt > maxRowNumEnt) {
+        errorDuringUnpack = true;
+#ifdef HAVE_TPETRA_DEBUG
         std::ostream& err = this->markLocalErrorAndGetStream ();
         err << prefix << "At i = " << i << ", numEnt = " << numEnt
             << " > maxRowNumEnt = " << maxRowNumEnt << endl;
+#endif // HAVE_TPETRA_DEBUG
         continue;
       }
 
@@ -2431,12 +2462,16 @@ namespace Experimental {
       vals_out_type valsOut = subview (vals, pair_type (0, numScalarEnt));
 
       const size_t numBytesOut =
-        unpackRowForBlockCrs<ST, LO, GO, HES> (gidsOut, valsOut, importsK, offset, numBytes,
-                                               numEnt, numBytesPerValue, blockSize);
+        unpackRowForBlockCrs<ST, LO, GO, HES> (gidsOut, valsOut, importsK,
+                                               offset, numBytes, numEnt,
+                                               numBytesPerValue, blockSize);
       if (numBytes != numBytesOut) {
+        errorDuringUnpack = true;
+#ifdef HAVE_TPETRA_DEBUG
         std::ostream& err = this->markLocalErrorAndGetStream ();
         err << prefix << "At i = " << i << ", numBytes = " << numBytes
             << " != numBytesOut = " << numBytesOut << ".";
+#endif // HAVE_TPETRA_DEBUG
         continue;
       }
 
@@ -2444,14 +2479,15 @@ namespace Experimental {
       lids_out_type lidsOut = subview (lclColInds, pair_type (0, numEnt));
       for (size_t k = 0; k < numEnt; ++k) {
         lidsOut(k) = tgtColMap.getLocalElement (gidsOut(k));
-#ifdef HAVE_TPETRA_DEBUG
         if (lidsOut(k) == Teuchos::OrdinalTraits<LO>::invalid ()) {
+          errorDuringUnpack = true;
+#ifdef HAVE_TPETRA_DEBUG
           std::ostream& err = this->markLocalErrorAndGetStream ();
           err << prefix << "At i = " << i << ", GID " << gidsOut(k)
               << " is not owned by the calling process.";
+#endif // HAVE_TPETRA_DEBUG
           continue;
         }
-#endif // HAVE_TPETRA_DEBUG
       }
 
       // Combine the incoming data with the matrix's current data.
@@ -2466,20 +2502,30 @@ namespace Experimental {
       } else if (CM == ABSMAX) {
         numCombd = this->absMaxLocalValues (lclRow, lidsRaw, valsRaw, numEnt);
       }
-#ifdef HAVE_TPETRA_DEBUG
+
       if (static_cast<LO> (numEnt) != numCombd) {
+        errorDuringUnpack = true;
+#ifdef HAVE_TPETRA_DEBUG
         std::ostream& err = this->markLocalErrorAndGetStream ();
         err << prefix << "At i = " << i << ", numEnt = " << numEnt
             << " != numCombd = " << numCombd << ".";
+#endif // HAVE_TPETRA_DEBUG
         continue;
       }
-#else
-      (void) numCombd; // ignore, just for now
-#endif // HAVE_TPETRA_DEBUG
 
       // Don't update offset until current LID has succeeded.
       offset += numBytes;
     } // for each import LID i
+
+    if (errorDuringUnpack) {
+      std::ostream& err = this->markLocalErrorAndGetStream ();
+      err << prefix << "Unpacking failed.";
+#ifndef HAVE_TPETRA_DEBUG
+      err << "  Please run again with a debug build to get more verbose "
+        "diagnostic output.";
+#endif // ! HAVE_TPETRA_DEBUG
+      err << endl;
+    }
 
     if (debug) {
       std::ostringstream os;
@@ -2944,34 +2990,34 @@ namespace Experimental {
   BlockCrsMatrix<Scalar, LO, GO, Node>::
   getLocalDiagCopy (Tpetra::Vector<Scalar,LO,GO,Node> &diag) const
   {
+    const size_t lclNumMeshRows = graph_.getNodeNumRows ();
+
+    Kokkos::View<size_t*, device_type> diagOffsets ("diagOffsets", lclNumMeshRows);
+    graph_.getLocalDiagOffsets (diagOffsets);
+
+    // The code below works on host, so use a host View.
+    auto diagOffsetsHost = Kokkos::create_mirror_view (diagOffsets);
+    Kokkos::deep_copy (diagOffsetsHost, diagOffsets);
+    // We're filling diag on host for now.
+    diag.template modify<typename decltype (diagOffsetsHost)::memory_space> ();
+
     // TODO amk: This is a temporary measure to make the code run with Ifpack2
-    int rowOffset = 0;
-    int offset = 0;
+    size_t rowOffset = 0;
+    size_t offset = 0;
     LO bs = getBlockSize();
-    Teuchos::ArrayRCP<size_t> colOffsets;
-    getLocalDiagOffsets (colOffsets);
     for(size_t r=0; r<getNodeNumRows(); r++)
     {
       // move pointer to start of diagonal block
-      offset = rowOffset + colOffsets[r]*bs*bs;
+      offset = rowOffset + diagOffsetsHost(r)*bs*bs;
       for(int b=0; b<bs; b++)
       {
-        std::cout << "offset: " << offset+b*(bs+1) << std::endl;
         diag.replaceLocalValue(r*bs+b, val_[offset+b*(bs+1)]);
       }
       // move pointer to start of next block row
       rowOffset += getNumEntriesInLocalRow(r)*bs*bs;
     }
 
-#if 0
-    Teuchos::RCP<Teuchos::FancyOStream> wrappedStream = Teuchos::getFancyOStream (Teuchos::rcpFromRef (std::cout));
-    diag.describe (*wrappedStream, Teuchos::VERB_EXTREME);
-
-    std::cout << "Raw data:\n";
-    int nnz = getNodeNumEntries()*bs*bs;
-    for(int i=0; i<nnz; i++)
-      std::cout << "val[" << i << "] = " << val_[i] << std::endl;
-#endif // 0
+    diag.template sync<memory_space> (); // sync vec of diag entries back to dev
   }
 
   template<class Scalar, class LO, class GO, class Node>

@@ -63,14 +63,13 @@ namespace Iopg {
     bool operator() (const std::pair<std::string, const Ioss::ElementTopology*> &lhs,
                      const std::pair<std::string, const Ioss::ElementTopology*> &rhs) const
     {
-      assert(lhs.second != NULL);
-      assert(rhs.second != NULL);
+      assert(lhs.second != nullptr);
+      assert(rhs.second != nullptr);
       return lhs.first < rhs.first || (!(rhs.first < lhs.first) && lhs.second->name() < rhs.second->name());
     }
   };
 
   typedef std::map<std::pair<std::string, const Ioss::ElementTopology*>, int, TopologyMapCompare > TopologyMap;
-  typedef TopologyMap::value_type TopoMapPair;
 }
 
 namespace {
@@ -126,7 +125,7 @@ namespace Iopg {
 				       Ioss::DatabaseUsage db_usage,
 				       MPI_Comm communicator,
 				       const Ioss::PropertyManager &properties) const
-  { return new DatabaseIO(NULL, filename, db_usage, communicator, properties); }
+  { return new DatabaseIO(nullptr, filename, db_usage, communicator, properties); }
 
   // ========================================================================
   DatabaseIO::DatabaseIO(Ioss::Region *region, const std::string& filename,
@@ -138,7 +137,7 @@ namespace Iopg {
     elementCount(0), nodeBlockCount(0),
     elementBlockCount(0), nodesetCount(0), sidesetCount(0),
     commsetNodeCount(0), commsetElemCount(0),
-    nodeMap("node"), elemMap("elem"),
+    nodeMap("node", filename, myProcessor), elemMap("edge", filename, myProcessor),
     blockAdjacenciesCalculated(false)
   {
     if (is_input()) {
@@ -260,7 +259,7 @@ namespace Iopg {
     }
 
     if (error_detected || retval != ERROR_FREE_CREATION) {
-      char *error = NULL;
+      char *error = nullptr;
       if (retval == ERROR_CREATING_MS) {
 	int err_size = getPamgenErrorStreamSize();
 	error = new char[err_size+1];
@@ -343,8 +342,6 @@ namespace Iopg {
 
     Ioss::Region *this_region = get_region();
     this_region->property_add(Ioss::Property(std::string("title"), dbtitle));
-    this_region->property_add(Ioss::Property(std::string("spatial_dimension"),
-					     spatialDimension));
   }
 
   void DatabaseIO::read_communication_metadata()
@@ -567,7 +564,7 @@ namespace Iopg {
       std::string alias = Ioss::Utils::encode_entity_name("block", id);
       char * const element_type = &all_element_type[0] + iblk * (max_string_length+1);
 
-      Ioss::ElementBlock *block = NULL;
+      Ioss::ElementBlock *block = nullptr;
       std::string block_name = Ioss::Utils::encode_entity_name("block", id);
 
       Ioss::Utils::fixup_name(element_type); // Convert to lowercase; replace spaces with '_'
@@ -825,7 +822,7 @@ namespace Iopg {
 	    Ioss::ElementBlock *block = element_blocks[i];
 	    std::string name = block->name();
 	    const Ioss::ElementTopology *common_ftopo = block->topology()->boundary_type(0);
-	    if (common_ftopo != NULL) {
+	    if (common_ftopo != nullptr) {
 	      // All sides of this element block's topology have the same topology
 	      topo_map[std::make_pair(name, common_ftopo)] = 0;
 	      side_map[std::make_pair(name, common_ftopo)] = 0;
@@ -892,7 +889,7 @@ namespace Iopg {
 	  if (global_side_counts[i++] > 0) {
 	    const std::string topo_or_block_name   = (*I).first.first;
 	    const Ioss::ElementTopology *side_topo = (*I).first.second;
-	    assert(side_topo != NULL);
+	    assert(side_topo != nullptr);
 #if 0
 	    if (side_topo->parametric_dimension() == topology_dimension-1 ||
 		split_type == Ioss::SPLIT_BY_DONT_SPLIT ) {
@@ -913,15 +910,15 @@ namespace Iopg {
 		}
 	      }
 
-	      Ioss::ElementBlock* block = NULL;
+	      Ioss::ElementBlock* block = nullptr;
 	      // Need to get elem_topo....
-	      const Ioss::ElementTopology *elem_topo = NULL;
+	      const Ioss::ElementTopology *elem_topo = nullptr;
 	      if (split_type == Ioss::SPLIT_BY_TOPOLOGIES) {
 		elem_topo = Ioss::ElementTopology::factory(topo_or_block_name);
 	      }
 	      else if (split_type == Ioss::SPLIT_BY_ELEMENT_BLOCK) {
 		block = get_region()->get_element_block(topo_or_block_name);
-		if (block == NULL) {
+		if (block == nullptr) {
 		  std::ostringstream errmsg;
 		  std::cerr << "INTERNAL ERROR: Could not find element block '" << topo_or_block_name 
 			    << "' Something is wrong in the Ioex::DatabaseIO class. Please report.\n";
@@ -935,7 +932,7 @@ namespace Iopg {
 		// the model.
 		elem_topo = Ioss::ElementTopology::factory(topo_or_block_name);
 	      }
-	      assert(elem_topo != NULL);
+	      assert(elem_topo != nullptr);
 
 	      Ioss::SideBlock *side_block = new Ioss::SideBlock(this, side_block_name,
 								side_topo->name(),
@@ -945,7 +942,7 @@ namespace Iopg {
 
 	      // Note that all sideblocks within a specific
 	      // sideset might have the same id.
-	      assert(side_block != NULL);
+	      assert(side_block != nullptr);
 	      side_block->property_add(Ioss::Property("id", id));
 
 	      // If splitting by element block, need to set the
@@ -1202,7 +1199,8 @@ namespace Iopg {
 	    int j=0;
 	    for (i=0; i < entity_count; i++) {
 	      int local_id = entities[i];
-	      entity_proc[j++] = 10*map[local_id]+sides[i];
+	      entity_proc[j++] = map[local_id];
+	      entity_proc[j++] = sides[i];
 	      entity_proc[j++] = procs[i];
 	    }
 	  } else {
@@ -1276,7 +1274,7 @@ namespace Iopg {
 	  // storage for element numbers and overwrite with the side
 	  // numbers.
 	  Ioss::IntVector sides;
-	  int *element = NULL;
+	  int *element = nullptr;
 	  int *ids = static_cast<int*>(data);
 	  if (number_sides == static_cast<int>(entity_count)) {
 	    // Only 1 side block in this sideset
@@ -1496,7 +1494,7 @@ namespace Iopg {
 	  }
 	}
 
-	nodeMap.build_reverse_map(myProcessor);
+	nodeMap.build_reverse_map();
 
       } else {
 	unsupported("output nodal id map");
@@ -1532,7 +1530,7 @@ namespace Iopg {
 	  }
 	}
 
-	elemMap.build_reverse_map(myProcessor);
+	elemMap.build_reverse_map();
 
       } else {
 	unsupported("output element map");
@@ -1819,56 +1817,6 @@ namespace Iopg {
     }
   }
 
-  void DatabaseIO::compute_block_membership(int64_t id, std::vector<std::string> &block_membership) const
-  {
-    Ioss::IntVector block_ids(elementBlockCount);
-    if (elementBlockCount == 1) {
-      block_ids[0] = 1;
-    } else {
-      int number_sides;
-      int number_distribution_factors;
-      int error = im_ex_get_side_set_param(get_file_pointer(), id,
-					   &number_sides, &number_distribution_factors);
-      if (error < 0) {
-	pamgen_error(get_file_pointer(), __LINE__, myProcessor);
-      }
-      
-      if (number_sides > 0) {
-	// Get the element and element side lists.
-	Ioss::IntVector element(number_sides);
-	Ioss::IntVector sides(number_sides);
-	
-	int ierr = im_ex_get_side_set(get_file_pointer(), id, &element[0], &sides[0]);
-	if (ierr < 0)
-	  pamgen_error(get_file_pointer(), __LINE__, myProcessor);
-	
-	Ioss::ElementBlock *block = NULL;
-	for (int iel = 0; iel < number_sides; iel++) {
-	  int elem_id = element[iel];
-	  if (block == NULL || !block->contains(elem_id)) {
-	    block = get_region()->get_element_block(elem_id);
-	    assert(block != NULL);
-	    int block_order = block->get_property("original_block_order").get_int();
-	    block_ids[block_order] = 1;
-	  }
-	}
-      }
-
-      // Synchronize among all processors....
-      if (isParallel) {
-	util().global_array_minmax(block_ids, Ioss::ParallelUtils::DO_MAX);
-      }
-    }
-    Ioss::ElementBlockContainer element_blocks = get_region()->get_element_blocks();
-
-    for (int i=0; i < elementBlockCount; i++) {
-      if (block_ids[i] == 1) {
-	Ioss::ElementBlock *block = element_blocks[i];
-	block_membership.push_back(block->name());
-      }
-    }
-  }
-  
   void DatabaseIO::compute_block_membership(Ioss::SideBlock *sideblock,
 					    std::vector<std::string> &block_membership) const
   {
@@ -1880,13 +1828,13 @@ namespace Iopg {
       sideblock->get_field_data("element_side", element_side);
       
       size_t number_sides = element_side.size() / 2;
-      Ioss::ElementBlock *block = NULL;
+      Ioss::ElementBlock *block = nullptr;
       for (size_t iel = 0; iel < number_sides; iel++) {
 	int elem_id = element_side[2*iel];  // Vector contains both element and side.
 	elem_id = element_global_to_local(elem_id);
-	if (block == NULL || !block->contains(elem_id)) {
+	if (block == nullptr || !block->contains(elem_id)) {
 	  block = get_region()->get_element_block(elem_id);
-	  assert(block != NULL);
+	  assert(block != nullptr);
 	  int block_order = block->get_property("original_block_order").get_int();
 	  block_ids[block_order] = 1;
 	}
@@ -1939,10 +1887,10 @@ namespace Iopg {
 
     Ioss::IntVector elconnect;
     int elconsize = 0; // Size of currently allocated connectivity block
-    Ioss::ElementBlock *conn_block = NULL; // Block that we currently
+    Ioss::ElementBlock *conn_block = nullptr; // Block that we currently
     // have connectivity for
 
-    Ioss::ElementBlock *block = NULL;
+    Ioss::ElementBlock *block = nullptr;
 
     Ioss::IntVector side_elem_map; // Maps the side into the elements
     // connectivity array
@@ -1958,8 +1906,8 @@ namespace Iopg {
 
 	// ensure we have correct connectivity
 	block = get_region()->get_element_block(elem_id);
-	assert(block != NULL);
-	assert(block->topology() != NULL);
+	assert(block != nullptr);
+	assert(block->topology() != nullptr);
 
 	if (conn_block != block) {
 	  int nelem = block->get_property("entity_count").get_int();
@@ -1983,7 +1931,7 @@ namespace Iopg {
 	  int side_id = side[iel];
 	  side_elem_map = block->topology()->boundary_connectivity(side_id);
 	  current_side = side[iel];
-	  assert(block->topology()->boundary_type(side[iel]) != NULL);
+	  assert(block->topology()->boundary_type(side[iel]) != nullptr);
 	  nfnodes = block->topology()->boundary_type(side[iel])->number_nodes();
 	}
 	for (int inode = 0; inode < nfnodes; inode++) {
@@ -2021,29 +1969,29 @@ void separate_surface_element_sides(Ioss::IntVector &element,
 				    Ioss::SurfaceSplitType split_type)
 {
   if (!element.empty()) {
-    Ioss::ElementBlock *block = NULL;
+    Ioss::ElementBlock *block = nullptr;
     // Topology of sides in current element block
-    const Ioss::ElementTopology *common_ftopo = NULL;
-    const Ioss::ElementTopology *topo = NULL; // Topology of current side
+    const Ioss::ElementTopology *common_ftopo = nullptr;
+    const Ioss::ElementTopology *topo = nullptr; // Topology of current side
     int current_side = -1;
 
     for (size_t iel = 0; iel < element.size(); iel++) {
       int elem_id = element[iel];
-      if (block == NULL || !block->contains(elem_id)) {
+      if (block == nullptr || !block->contains(elem_id)) {
 	block = region->get_element_block(elem_id);
-	assert(block != NULL);
+	assert(block != nullptr);
 
-	// NULL if hetero sides on element
+	// nullptr if hetero sides on element
 	common_ftopo = block->topology()->boundary_type(0);
-	if (common_ftopo != NULL)
+	if (common_ftopo != nullptr)
 	  topo = common_ftopo;
 	current_side = -1;
       }
 
-      if (common_ftopo == NULL && sides[iel] != current_side) {
+      if (common_ftopo == nullptr && sides[iel] != current_side) {
 	current_side = sides[iel];
 	topo = block->topology()->boundary_type(sides[iel]);
-	assert(topo != NULL);
+	assert(topo != nullptr);
       }
       std::pair<std::string, const Ioss::ElementTopology*> name_topo;
       if (split_type == Ioss::SPLIT_BY_TOPOLOGIES) {

@@ -35,9 +35,8 @@
 // NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// Questions? Contact Pavel Bochev  (pbboche@sandia.gov)
-//                    Denis Ridzal  (dridzal@sandia.gov), or
-//                    Kara Peterson (kjpeter@sandia.gov)
+// Questions? Contact Kyungjoo Kim  (kyukim@sandia.gov), or
+//                    Mauro Perego  (mperego@sandia.gov)
 //
 // ************************************************************************
 // @HEADER
@@ -69,7 +68,7 @@ rankValue=1;
 intepidManaged=true;
 sizeValue=1;
 cudaMalloc(&containerMemory,sizeValue*sizeof(Scalar));
-this->initialize();
+//this->initialize();
 }
 
 template<class ScalarPointer>
@@ -148,7 +147,7 @@ sizeValue=dim_0;
 intepidManaged=true;
 cudaFree(&containerMemory);
 cudaMalloc(&containerMemory,sizeValue*sizeof(Scalar));
-this->initialize();
+//this->initialize();
 }
 
 void resize(index_type dim_0,index_type dim_1){
@@ -164,7 +163,7 @@ rankValue=2;
 sizeValue=dim_0*dim_1;
 cudaFree(&containerMemory);
 cudaMalloc(&containerMemory,sizeValue*sizeof(Scalar));
-this->initialize();
+//this->initialize();
 }
 
 void resize(index_type dim_0,index_type dim_1,index_type dim_2){
@@ -181,7 +180,7 @@ sizeValue=dim_0*dim_1*dim_2;
 intepidManaged=true;
 cudaFree(&containerMemory);
 cudaMalloc(&containerMemory,sizeValue*sizeof(Scalar));
-this->initialize();
+//this->initialize();
 }
 
 void resize(index_type dim_0,index_type dim_1,index_type dim_2,index_type dim_3){
@@ -198,7 +197,7 @@ sizeValue=dim_0*dim_1*dim_2*dim_3;
 intepidManaged=true;
 cudaFree(&containerMemory);
 cudaMalloc(&containerMemory,sizeValue*sizeof(Scalar));
-this->initialize();
+//this->initialize();
 }
 
 void resize(index_type dim_0,index_type dim_1,index_type dim_2,index_type dim_3,index_type dim_4){
@@ -231,7 +230,7 @@ sizeValue=dim_0*dim_1*dim_2*dim_3*dim_4*dim_5;
 intepidManaged=true;
 cudaFree(&containerMemory);
 cudaMalloc(&containerMemory,sizeValue*sizeof(Scalar));
-this->initialize();
+//this->initialize();
 }
 
 void resize(index_type dim_0,index_type dim_1,index_type dim_2,index_type dim_3,index_type dim_4,index_type dim_5,index_type dim_6){
@@ -248,7 +247,7 @@ sizeValue=dim_0*dim_1*dim_2*dim_3*dim_4*dim_5*dim_6;
 intepidManaged=true;
 cudaFree(&containerMemory);
 cudaMalloc(&containerMemory,sizeValue*sizeof(Scalar));
-this->initialize();
+//this->initialize();
 }
 
 void resize(index_type dim_0,index_type dim_1,index_type dim_2,index_type dim_3,index_type dim_4,index_type dim_5,index_type dim_6,index_type dim_7){
@@ -265,7 +264,7 @@ sizeValue=dim_0*dim_1*dim_2*dim_3*dim_4*dim_5*dim_6*dim_7;;
 intepidManaged=true;
 cudaFree(&containerMemory);
 cudaMalloc(&containerMemory,sizeValue*sizeof(Scalar));
-this->initialize();
+//this->initialize();
 }
 
 void resize(const Teuchos::Array<int>& newDimensions);
@@ -282,6 +281,7 @@ FieldContainer_Kokkos(FieldContainer_Kokkos& inContainer);
 FieldContainer_Kokkos(const FieldContainer_Kokkos& inContainer);
 ~FieldContainer_Kokkos();
 typedef Kokkos::Cuda execution_space;
+  typedef Kokkos::RangePolicy<execution_space,Kokkos::Schedule<Kokkos::Static> > range_policy;
 
 KOKKOS_INLINE_FUNCTION
 Scalar& operator[] (const index_type i0);
@@ -400,12 +400,13 @@ KOKKOS_INLINE_FUNCTION
 index_type dimension_7()const{return dim7;}
 
 void initialize(Scalar initValue){
-Kokkos::parallel_for(sizeValue,initFieldContKokkos<Scalar>(initValue,containerMemory));
+
+  Kokkos::parallel_for(range_policy(0, sizeValue),initFieldContKokkos<Scalar>(initValue,containerMemory));
 }
 
 void initialize(){
 Scalar initValue=Scalar(0.0);
-Kokkos::parallel_for(sizeValue,initFieldContKokkos<Scalar>(initValue,containerMemory));
+ Kokkos::parallel_for(range_policy(0, sizeValue),initFieldContKokkos<Scalar>(initValue,containerMemory));
 }
 
 };
@@ -613,7 +614,7 @@ rankValue=1;
 intepidManaged=true;
 sizeValue=dim_0;
 cudaMalloc(&containerMemory,sizeValue*sizeof(Scalar));
-this->initialize();
+//this->initialize();
 }
 
 template <class Scalar>
@@ -625,7 +626,7 @@ rankValue=2;
 intepidManaged=true;
 sizeValue=dim_0*dim_1;
 cudaMalloc(&containerMemory,sizeValue*sizeof(Scalar));
-this->initialize();
+//this->initialize();
 }
 template <class Scalar>
 FieldContainer_Kokkos<Scalar,Kokkos::LayoutRight,Kokkos::Cuda>::FieldContainer_Kokkos(index_type dim_0,index_type dim_1,index_type dim_2){
@@ -637,7 +638,7 @@ rankValue=3;
 intepidManaged=true;
 sizeValue=dim_0*dim_1*dim_2;
 cudaMalloc(&containerMemory,sizeValue*sizeof(Scalar));
-this->initialize();
+//this->initialize();
 }
 
 template <class Scalar>
@@ -651,7 +652,7 @@ rankValue=4;
 intepidManaged=true;
 sizeValue=dim_0*dim_1*dim_2*dim_3;
 cudaMalloc(&containerMemory,sizeValue*sizeof(Scalar));
-this->initialize();
+//this->initialize();
 }
 
 template <class Scalar>
@@ -666,7 +667,7 @@ rankValue=5;
 intepidManaged=true;
 sizeValue=dim_0*dim_1*dim_2*dim_3*dim_4;
 cudaMalloc(&containerMemory,sizeValue*sizeof(Scalar));
-this->initialize();
+//this->initialize();
 }
 
 template <class Scalar>
@@ -682,7 +683,7 @@ rankValue=6;
 intepidManaged=true;
 sizeValue=dim_0*dim_1*dim_2*dim_3*dim_4*dim_5;
 cudaMalloc(&containerMemory,sizeValue*sizeof(Scalar));
-this->initialize();
+//this->initialize();
 }
 template <class Scalar>
 FieldContainer_Kokkos<Scalar,Kokkos::LayoutRight,Kokkos::Cuda>::FieldContainer_Kokkos(index_type dim_0,index_type dim_1,index_type dim_2,index_type dim_3,index_type dim_4,index_type dim_5,index_type dim_6){
@@ -698,7 +699,7 @@ rankValue=7;
 intepidManaged=true;
 sizeValue=dim_0*dim_1*dim_2*dim_3*dim_4*dim_5*dim_6;
 cudaMalloc(&containerMemory,sizeValue*sizeof(Scalar));
-this->initialize();
+//this->initialize();
 }
 
 
@@ -717,7 +718,7 @@ rankValue=8;
 intepidManaged=true;
 sizeValue=dim_0*dim_1*dim_2*dim_3*dim_4*dim_5*dim_6*dim_7;
 cudaMalloc(&containerMemory,sizeValue*sizeof(Scalar));
-this->initialize();
+//this->initialize();
 }
 
 template <class Scalar>
